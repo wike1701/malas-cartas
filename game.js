@@ -16,8 +16,19 @@
     return d;
   }
 
+  // Azar del navegador para criptografía si existe (mejor que Math.random); si no, Math.random.
+  function defaultRng() {
+    const c = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
+    if (c && c.getRandomValues) {
+      const buf = new Uint32Array(1);
+      return () => { c.getRandomValues(buf); return buf[0] / 4294967296; };
+    }
+    return Math.random;
+  }
+  const RNG = defaultRng();
+
   function shuffle(a, rng) {
-    rng = rng || Math.random;
+    rng = rng || RNG;
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];

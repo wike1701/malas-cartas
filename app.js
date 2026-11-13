@@ -79,24 +79,85 @@
     return location.origin + location.pathname + '?sala=' + code;
   }
 
-  const SUIT_SVG = {
-    oros: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#e8b23a" stroke="#8a5a00" stroke-width="2"/><circle cx="20" cy="20" r="8.5" fill="none" stroke="#8a5a00" stroke-width="2"/><circle cx="20" cy="20" r="3" fill="#8a5a00"/></svg>',
-    copas: '<svg viewBox="0 0 40 40"><path d="M9 5h22c0 10-4 16-11 16S9 15 9 5z" fill="#d23b44" stroke="#7a1218" stroke-width="2"/><rect x="18" y="21" width="4" height="9" fill="#7a1218"/><path d="M12 30h16l2 6H10z" fill="#d23b44" stroke="#7a1218" stroke-width="2" stroke-linejoin="round"/></svg>',
-    espadas: '<svg viewBox="0 0 40 40"><path d="M20 1l4 6v19h-8V7z" fill="#4a86d6" stroke="#173f73" stroke-width="1.5" stroke-linejoin="round"/><rect x="9" y="26" width="22" height="4" rx="2" fill="#173f73"/><rect x="18" y="30" width="4" height="6" fill="#173f73"/><circle cx="20" cy="37.5" r="2.2" fill="#173f73"/></svg>',
-    bastos: '<svg viewBox="0 0 40 40"><path d="M13 5c4-4 11-2 12 4l4 25c0 4-7 5-8 1L12 12c-2-3-1-5 1-7z" fill="#46a868" stroke="#1d5632" stroke-width="2" stroke-linejoin="round"/><circle cx="17" cy="11" r="1.8" fill="#1d5632"/><circle cx="21.5" cy="19" r="1.8" fill="#1d5632"/><circle cx="24" cy="27" r="1.8" fill="#1d5632"/></svg>',
+  // Símbolos de los palos dibujados en una caja de 40×40.
+  const SUIT_G = {
+    oros: '<circle cx="20" cy="20" r="15" fill="#e8b23a" stroke="#8a5a00" stroke-width="2"/><circle cx="20" cy="20" r="8.5" fill="none" stroke="#8a5a00" stroke-width="2"/><circle cx="20" cy="20" r="3" fill="#8a5a00"/>',
+    copas: '<path d="M9 5h22c0 10-4 16-11 16S9 15 9 5z" fill="#d23b44" stroke="#7a1218" stroke-width="2"/><path d="M11.5 8h17" stroke="#f3a0a5" stroke-width="1.5" stroke-linecap="round"/><rect x="18" y="21" width="4" height="9" fill="#7a1218"/><path d="M12 30h16l2 6H10z" fill="#d23b44" stroke="#7a1218" stroke-width="2" stroke-linejoin="round"/>',
+    espadas: '<path d="M20 1l4 6v19h-8V7z" fill="#4a86d6" stroke="#173f73" stroke-width="1.5" stroke-linejoin="round"/><path d="M20 5v20" stroke="#cfe0f7" stroke-width="1.2"/><rect x="9" y="26" width="22" height="4" rx="2" fill="#173f73"/><rect x="18" y="30" width="4" height="6" fill="#173f73"/><circle cx="20" cy="37.5" r="2.2" fill="#173f73"/>',
+    bastos: '<path d="M13 5c4-4 11-2 12 4l4 25c0 4-7 5-8 1L12 12c-2-3-1-5 1-7z" fill="#46a868" stroke="#1d5632" stroke-width="2" stroke-linejoin="round"/><circle cx="17" cy="11" r="1.8" fill="#1d5632"/><circle cx="21.5" cy="19" r="1.8" fill="#1d5632"/><circle cx="24" cy="27" r="1.8" fill="#1d5632"/>',
   };
+  const SUIT_COL = { oros: '#b8860b', copas: '#c8323b', espadas: '#2563b0', bastos: '#2e8b57' };
+  const SUIT_TINT = { oros: '#fbefc8', copas: '#f8dcdc', espadas: '#dce7f7', bastos: '#dcefe1' };
+  // "Pintas": cortes en el marco que indican el palo, como en la baraja española.
+  const PINTAS = { oros: [], copas: [50], espadas: [42, 58], bastos: [36, 50, 64] };
   const FIG = { 1: 'As', 10: 'Sota', 11: 'Caballo', 12: 'Rey' };
+  // Posiciones (centro) de los símbolos en las cartas del 2 al 7.
+  const PIPS = {
+    2: [[50, 45], [50, 105]],
+    3: [[50, 38], [50, 75], [50, 112]],
+    4: [[34, 45], [66, 45], [34, 105], [66, 105]],
+    5: [[34, 42], [66, 42], [50, 75], [34, 108], [66, 108]],
+    6: [[34, 40], [66, 40], [34, 75], [66, 75], [34, 110], [66, 110]],
+    7: [[34, 38], [66, 38], [50, 57], [34, 80], [66, 80], [34, 112], [66, 112]],
+  };
+  // Dibujos sencillos de las figuras, centrados en (0,0). COL se cambia por el color del palo.
+  const FIG_ART = {
+    10: '<path d="M-13 22c0-9 6-13 13-13s13 4 13 13z" fill="COL"/><circle cx="0" cy="0" r="9" fill="#f1c9a0" stroke="#8a5a3a" stroke-width="1"/>' +
+      '<path d="M-12-5c2-9 22-9 24 0c-6-3-18-3-24 0z" fill="COL" stroke="#3a2a1a" stroke-width="1"/><path d="M8-9c6-8 12-10 16-9c-4 3-8 7-12 10" fill="#fff" stroke="#3a2a1a" stroke-width="1"/>' +
+      '<circle cx="-3" cy="1" r="1" fill="#3a2a1a"/><circle cx="3" cy="1" r="1" fill="#3a2a1a"/><path d="M-3 5q3 2 6 0" stroke="#8a3a2a" fill="none" stroke-width="1"/>',
+    11: '<path d="M-14 22l3-14c-3-6-2-16 6-20l2-6 4 6c7 2 13 9 12 16l-4 3-6-3-4 6 3 12z" fill="#9a6532" stroke="#4a2a12" stroke-width="1.5" stroke-linejoin="round"/>' +
+      '<path d="M-5-12c-6 3-9 10-8 18l3-1c0-6 2-11 6-14z" fill="#3a2414"/><circle cx="4" cy="-6" r="1.6" fill="#1a0f06"/>' +
+      '<path d="M-9 4h16l2 6h-20z" fill="COL" stroke="#3a2a1a" stroke-width="1"/>',
+    12: '<path d="M-15 24c0-10 7-14 15-14s15 4 15 14z" fill="COL"/><circle cx="0" cy="2" r="9" fill="#f1c9a0" stroke="#8a5a3a" stroke-width="1"/>' +
+      '<path d="M-9 4c1 10 17 10 18 0c-3 4-15 4-18 0z" fill="#d9d2c4" stroke="#8a8070" stroke-width="1"/>' +
+      '<path d="M-11-6v-12l5.5 6 5.5-9 5.5 9 5.5-6v12z" fill="#e8b23a" stroke="#8a5a00" stroke-width="1.5" stroke-linejoin="round"/>' +
+      '<circle cx="0" cy="-11" r="1.6" fill="#c8323b"/><circle cx="-3" cy="2" r="1" fill="#3a2a1a"/><circle cx="3" cy="2" r="1" fill="#3a2a1a"/>',
+  };
+
+  const pip = (s, x, y, size) => '<g transform="translate(' + (x - size / 2) + ' ' + (y - size / 2) + ') scale(' + size / 40 + ')">' + SUIT_G[s] + '</g>';
+
+  function frameSVG(s) {
+    const gap = 3;
+    let edges = '';
+    for (const y of [5, 145]) {
+      let x0 = 5;
+      for (const cx of PINTAS[s].concat([95 + gap])) {
+        edges += '<line x1="' + x0 + '" y1="' + y + '" x2="' + (cx - gap) + '" y2="' + y + '"/>';
+        x0 = cx + gap;
+      }
+    }
+    return '<g stroke="' + SUIT_COL[s] + '" stroke-width="1.6" fill="none">' + edges +
+      '<line x1="5" y1="5" x2="5" y2="145"/><line x1="95" y1="5" x2="95" y2="145"/></g>';
+  }
+
+  function faceSVG(card) {
+    const s = card.s, n = card.n, c = SUIT_COL[s];
+    let body;
+    if (PIPS[n]) {
+      body = PIPS[n].map(([x, y]) => pip(s, x, y, 24)).join('');
+    } else if (n === 1) {
+      body = '<circle cx="50" cy="75" r="31" fill="' + SUIT_TINT[s] + '" stroke="' + c + '" stroke-width="1.5"/>' +
+        '<circle cx="50" cy="75" r="26" fill="none" stroke="' + c + '" stroke-width="1" stroke-dasharray="2 3"/>' + pip(s, 50, 75, 44);
+    } else {
+      body = '<rect x="21" y="20" width="58" height="110" rx="5" fill="' + SUIT_TINT[s] + '" stroke="' + c + '" stroke-width="1.5"/>' +
+        '<g transform="translate(50 52)">' + FIG_ART[n].replace(/COL/g, c) + '</g>' + pip(s, 50, 96, 26) +
+        '<rect x="24" y="114" width="52" height="12" rx="2" fill="' + c + '"/>' +
+        '<text x="50" y="123" text-anchor="middle" font-size="8.5" font-weight="700" letter-spacing="1" fill="#fff">' + FIG[n].toUpperCase() + '</text>';
+    }
+    const corner = '<text x="13" y="21" text-anchor="middle" font-size="15" font-weight="800" fill="' + c + '">' + n + '</text>' + pip(s, 13, 30, 10);
+    return '<svg class="face" viewBox="0 0 100 150" aria-hidden="true" font-family="Georgia, serif">' + frameSVG(s) + body +
+      corner + '<g transform="rotate(180 50 75)">' + corner + '</g></svg>';
+  }
 
   function cardHTML(card, o) {
     o = o || {};
     const cls = (o.sm ? ' sm' : '') + (o.playable ? ' playable' : '');
     const tag = o.button ? 'button' : 'div';
     const attrs = o.button ? (' data-play="' + esc(o.key) + '"' + (o.playable ? '' : ' disabled')) : '';
-    if (!card) return '<' + tag + ' class="card back' + cls + '"' + attrs + ' aria-label="Carta oculta"></' + tag + '>';
+    if (!card) return '<' + tag + ' class="card back' + cls + '"' + attrs + ' aria-label="Carta oculta"><span class="medallion">MC</span></' + tag + '>';
     const label = (FIG[card.n] || card.n) + ' de ' + card.s;
     return '<' + tag + ' class="card s-' + card.s + cls + '"' + attrs + ' aria-label="' + label + '" title="' + label + '">' +
-      '<span class="idx tl">' + card.n + '</span><span class="pip">' + SUIT_SVG[card.s] + '</span>' +
-      '<span class="fig">' + (FIG[card.n] || '') + '</span><span class="idx br">' + card.n + '</span></' + tag + '>';
+      faceSVG(card) + '</' + tag + '>';
   }
 
   // Corazones; los `lost` recién perdidos se "rompen" con una animación.

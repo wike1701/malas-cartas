@@ -51,6 +51,30 @@ while (g.phase !== 'gameOver' && rounds < 200) {
 assert.strictEqual(g.phase, 'gameOver');
 assert.ok(g.winners.length >= 1);
 g.players.forEach(p => assert.ok(p.lives >= 0));
+// Nunca hay cartas repetidas: 300 rondas de 6 jugadores con el azar real
+{
+  const valid = new Set(MC.makeDeck().map(c => c.id));
+  assert.strictEqual(valid.size, 40);
+  for (let r = 0; r < 300; r++) {
+    const gr = MC.createGame();
+    for (let i = 0; i < 6; i++) MC.addPlayer(gr, 'r' + i, 'J' + i);
+    MC.startGame(gr);
+    const ids = gr.players.flatMap(p => p.hand.map(c => c.id));
+    assert.strictEqual(ids.length, 30);
+    assert.strictEqual(new Set(ids).size, 30, 'cartas repetidas en el reparto');
+    ids.forEach(id => assert.ok(valid.has(id)));
+  }
+}
+// El barajado es uniforme: cada carta sale primera ~1/40 de las veces
+{
+  const counts = {};
+  const N = 40000;
+  for (let i = 0; i < N; i++) { const c = MC.shuffle(MC.makeDeck())[0].id; counts[c] = (counts[c] || 0) + 1; }
+  const vals = Object.values(counts);
+  assert.strictEqual(vals.length, 40);
+  vals.forEach(v => assert.ok(Math.abs(v - N / 40) < N / 40 * 0.15, 'barajado sesgado: ' + v));
+}
+
 // Avatares
 const AV = require('./avatars.js');
 const FX = require('./fx.js');
