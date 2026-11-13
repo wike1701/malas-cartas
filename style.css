@@ -75,7 +75,7 @@ input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
 .lobby { max-width: 520px; margin: 24px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 16px; text-align: center; }
 .big-code { font-size: 3rem; font-weight: 800; letter-spacing: .3em; color: var(--gold); margin: 0; padding-left: .3em; }
 .lobby-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.lobby-list li { background: rgba(0,0,0,.25); border-radius: 10px; padding: 10px 14px; display: flex; justify-content: space-between; }
+.lobby-list li { background: rgba(0,0,0,.25); border-radius: 10px; padding: 8px 12px; display: flex; justify-content: space-between; }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
 
@@ -108,11 +108,12 @@ input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
   align-items: center; justify-content: center; gap: 14px; padding: 18px;
 }
 .play { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: .8rem; color: var(--muted); }
-.play.new { animation: drop .25s ease-out; }
+.play.new { animation: drop .45s cubic-bezier(.2,.9,.3,1.2) both; }
+.play.sweep { transition: transform .55s cubic-bezier(.5,0,.75,0), opacity .55s ease-in; transform: translate(var(--dx), var(--dy)) scale(.35) rotate(12deg); opacity: 0; }
 .play.win .card { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(233,185,73,.8); }
 .play.win span { color: var(--gold); font-weight: 700; }
 .table-empty { color: var(--muted); font-size: .9rem; }
-@keyframes drop { from { transform: translateY(-14px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes drop { from { transform: translateY(-46px) rotate(-10deg) scale(1.2); opacity: 0; } }
 
 .status { text-align: center; font-size: 1.1rem; font-weight: 600; min-height: 1.5em; }
 .status.mine { color: var(--gold); }
@@ -173,6 +174,59 @@ button.card:disabled { cursor: default; opacity: 1; }
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 20;
   background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; max-width: calc(100% - 32px);
   box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+
+/* Avatares */
+.avatar { display: block; flex: none; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.4); overflow: hidden; }
+img.avatar { object-fit: cover; }
+.avatar.big { width: 56px; height: 56px; box-shadow: 0 0 0 2px var(--gold), 0 6px 14px rgba(0,0,0,.4); }
+.avatar.sm { width: 32px; height: 32px; }
+.avatar.xs { width: 20px; height: 20px; }
+.avatar.seat-av { width: 42px; height: 42px; box-shadow: 0 0 0 2px rgba(255,255,255,.15); }
+.seat.turn .avatar.seat-av { box-shadow: 0 0 0 2px var(--gold); }
+.seat.dead .avatar { filter: grayscale(1); }
+.avatar-head { display: flex; align-items: center; gap: 10px; }
+.avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 4px; }
+.av-pick { aspect-ratio: 1; padding: 0; border-radius: 50%; border: 2px solid transparent; background: rgba(0,0,0,.25); transition: transform .12s, border-color .12s; }
+.av-pick .avatar { width: 100%; height: 100%; }
+.av-pick.sel { border-color: var(--gold); transform: scale(1.08); }
+.av-pick:hover:not(.sel) { border-color: rgba(255,255,255,.4); }
+.av-pick.upload { font-size: 1.2rem; color: var(--ink); }
+.who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.lobby-list li { align-items: center; gap: 8px; }
+.lobby-list li .who { flex: 1; text-align: left; }
+.small-btn { padding: 4px 10px; font-size: .8rem; }
+.lobby > .avatar-grid { background: rgba(0,0,0,.2); padding: 10px; border-radius: 10px; }
+.seat-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.seat-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.icon-btn { background: none; border: none; color: var(--ink); font-size: 1.2rem; padding: 4px 6px; border-radius: 8px; }
+.icon-btn:hover { background: rgba(0,0,0,.3); }
+
+/* Efectos */
+.deal { animation: deal .4s ease both; animation-delay: calc(var(--i, 0) * .09s); }
+@keyframes deal { from { transform: translateY(-60px) rotate(-8deg) scale(.8); opacity: 0; } }
+.hand.my-turn { animation: glow 1.6s ease-in-out infinite; border-radius: 14px; }
+@keyframes glow { 50% { box-shadow: 0 0 0 2px rgba(233,185,73,.35), 0 0 22px rgba(233,185,73,.35); } }
+.stamp { display: inline-block; animation: stampIn .35s ease-out both; }
+@keyframes stampIn { from { transform: scale(2.2) rotate(-8deg); opacity: 0; } }
+.pop { display: inline-block; animation: pop .5s cubic-bezier(.2,1.6,.4,1) both; animation-delay: .3s; color: var(--gold); }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.8); } 100% { transform: scale(1); } }
+.seat.won-trick { animation: winGlow 1.2s ease both; }
+@keyframes winGlow { 30% { box-shadow: 0 0 0 2px var(--gold), 0 0 24px rgba(233,185,73,.7); } }
+.seat.shake { animation: shake .5s ease both; animation-delay: .2s; }
+@keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+.lives .break { display: inline-block; animation: heartBreak .9s ease both; animation-delay: .3s; }
+@keyframes heartBreak { 0% { color: var(--red); transform: scale(1); } 35% { color: var(--red); transform: scale(1.6); } 100% { transform: scale(1) rotate(15deg); } }
+.medals { display: flex; justify-content: center; gap: 12px; }
+.medal { border-radius: 50%; padding: 4px; background: linear-gradient(135deg, #f3d47a, #b8860b); box-shadow: 0 0 0 6px rgba(233,185,73,.25), 0 0 40px rgba(233,185,73,.45); animation: medalIn .6s cubic-bezier(.2,1.4,.4,1) both; }
+.avatar.medal-av { width: 96px; height: 96px; }
+@keyframes medalIn { from { transform: scale(.3) rotate(-20deg); opacity: 0; } }
+.modal-body { position: relative; }
+.confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 16px; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: fall linear both; }
+@keyframes fall { to { transform: translateY(520px) rotate(540deg); opacity: .2; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 @media (max-width: 560px) {

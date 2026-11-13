@@ -1,6 +1,7 @@
 // Lógica pura del juego "Malas Cartas". Sin red ni DOM: la usa el anfitrión.
 (function (root) {
   'use strict';
+  const AV = typeof module !== 'undefined' && module.exports ? require('./avatars.js') : root.MCAV;
 
   const SUITS = ['oros', 'copas', 'espadas', 'bastos'];
   const NUMS = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
@@ -58,12 +59,23 @@
     if (g.log.length > 60) g.log.shift();
   }
 
-  function addPlayer(g, cid, name) {
+  // Avatar válido o, si no, uno estable según el id de cliente.
+  const cleanAvatar = (a, cid) => (AV.isValidAvatar(a) ? a : AV.defaultAvatar(cid));
+
+  function addPlayer(g, cid, name, avatar) {
     if (g.phase !== 'lobby') fail('La partida ya ha empezado');
     if (g.players.length >= MAX_PLAYERS) fail('La sala está llena (máximo ' + MAX_PLAYERS + ')');
-    g.players.push({ cid, name, lives: START_LIVES, alive: true, hand: [], bid: null, won: 0, connected: true });
+    g.players.push({ cid, name, lives: START_LIVES, alive: true, hand: [], bid: null, won: 0, connected: true, avatar: cleanAvatar(avatar, cid) });
     log(g, name + ' se ha unido');
     return g.players.length - 1;
+  }
+
+  // Se puede cambiar el avatar en cualquier momento.
+  function setAvatar(g, pi, avatar) {
+    const p = g.players[pi];
+    if (!p) fail('Jugador desconocido');
+    if (!AV.isValidAvatar(avatar)) fail('Avatar no válido');
+    p.avatar = avatar;
   }
 
   function removePlayer(g, pi) {
@@ -234,7 +246,7 @@
       forbidden: g.turn === pi ? forbiddenBid(g) : null,
       log: g.log.slice(-25),
       players: g.players.map((p, i) => ({
-        name: p.name, lives: p.lives, alive: p.alive, bid: p.bid, won: p.won,
+        name: p.name, avatar: p.avatar, lives: p.lives, alive: p.alive, bid: p.bid, won: p.won,
         connected: p.connected, handCount: p.hand.length,
         hand: i === pi ? (blind ? null : p.hand) : (blind ? p.hand : null),
       })),
@@ -243,7 +255,7 @@
 
   const api = {
     SUITS, NUMS, MAX_PLAYERS, MIN_PLAYERS, START_LIVES, MAX_CARDS,
-    makeDeck, shuffle, rank, trickWinner, nextCardCount, createGame, addPlayer, removePlayer,
+    makeDeck, shuffle, rank, trickWinner, nextCardCount, createGame, addPlayer, setAvatar, removePlayer,
     aliveIdx, nextAlive, startGame, startRound, forbiddenBid, placeBid, playCard, advance,
     endRound, backToLobby, autoAction, viewFor,
   };

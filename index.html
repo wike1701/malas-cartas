@@ -18,6 +18,11 @@
         <input id="name" maxlength="16" autocomplete="nickname" placeholder="Escribe tu nombre">
       </label>
 
+      <div class="field avatar-field">
+        <span class="avatar-head"><span id="my-avatar"></span>Tu avatar <span class="muted small">(o sube una foto con 📷)</span></span>
+        <div id="avatar-pick"></div>
+      </div>
+
       <button id="btn-create" class="btn primary big">Crear sala</button>
 
       <div class="sep"><span>o únete con un código</span></div>
@@ -46,6 +51,7 @@
     <header class="topbar">
       <div class="brand">Malas Cartas</div>
       <div id="round-info" class="round-info"></div>
+      <button id="btn-mute" class="icon-btn" data-act="mute" title="Silenciar">🔊</button>
       <button id="btn-code" class="code-chip" title="Copiar enlace de invitación"></button>
     </header>
 
@@ -69,6 +75,9 @@
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="avatars.js"></script>
+  <script src="sound.js"></script>
+  <script src="fx.js"></script>
   <script src="game.js"></script>
   <script src="app.js"></script>
 </body>

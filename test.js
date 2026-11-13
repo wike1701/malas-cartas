@@ -51,5 +51,48 @@ while (g.phase !== 'gameOver' && rounds < 200) {
 assert.strictEqual(g.phase, 'gameOver');
 assert.ok(g.winners.length >= 1);
 g.players.forEach(p => assert.ok(p.lives >= 0));
+// Avatares
+const AV = require('./avatars.js');
+const FX = require('./fx.js');
+assert.ok(AV.AVATAR_IDS.length === 16);
+AV.AVATAR_IDS.forEach(id => assert.ok(AV.isValidAvatar(id)));
+assert.ok(AV.isValidAvatar('data:image/jpeg;base64,' + 'A'.repeat(200)));
+assert.ok(!AV.isValidAvatar('javascript:alert(1)'));
+assert.ok(!AV.isValidAvatar('data:image/svg+xml;base64,AAAA'));
+assert.ok(!AV.isValidAvatar('data:image/jpeg;base64,' + 'A'.repeat(30000)));
+assert.strictEqual(AV.defaultAvatar('xyz'), AV.defaultAvatar('xyz'));
+const ga = MC.createGame();
+if (ga) {
+  MC.addPlayer(ga, 'a1', 'Uno', 'javascript:x');
+  MC.addPlayer(ga, 'a2', 'Dos', AV.AVATAR_IDS[3]);
+  assert.strictEqual(ga.players[0].avatar, AV.defaultAvatar('a1'));
+  assert.strictEqual(MC.viewFor(ga, 0).players[1].avatar, AV.AVATAR_IDS[3]);
+  assert.throws(() => MC.setAvatar(ga, 0, '<svg>'));
+  MC.setAvatar(ga, 0, AV.AVATAR_IDS[5]);
+  assert.strictEqual(ga.players[0].avatar, AV.AVATAR_IDS[5]);
+}
+
+// Eventos entre vistas
+{
+  const base = { me: 0, phase: 'playing', round: 2, cards: 3, turn: 1, trickNum: 0, trick: [], lastTrick: null, winners: [],
+    players: [{ name: 'A', bid: 1, lives: 5, alive: true }, { name: 'B', bid: 0, lives: 5, alive: true }] };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  assert.deepStrictEqual(FX.detectEvents(null, base), []);
+  const n1 = clone(base); n1.trick = [{ pi: 1 }]; n1.turn = 0;
+  const e1 = FX.detectEvents(base, n1).map(e => e.type);
+  assert.deepStrictEqual(e1, ['play', 'turn']);
+  const n2 = clone(n1); n2.phase = 'trickEnd'; n2.trick = [{ pi: 1 }, { pi: 0 }]; n2.lastTrick = { winner: 0 };
+  const e2 = FX.detectEvents(n1, n2);
+  assert.ok(e2.some(e => e.type === 'trick' && e.mine));
+  const n3 = clone(n2); n3.phase = 'roundEnd'; n3.players[1].lives = 0; n3.players[1].alive = false;
+  const e3 = FX.detectEvents(n2, n3);
+  assert.ok(e3.some(e => e.type === 'lives' && e.pi === 1 && e.n === 5) && e3.some(e => e.type === 'out' && e.pi === 1));
+  const n4 = clone(n3); n4.phase = 'gameOver'; n4.winners = [0];
+  assert.ok(FX.detectEvents(n3, n4).some(e => e.type === 'over' && e.win));
+  const n5 = clone(base); n5.phase = 'bidding'; n5.round = 3; n5.turn = 0;
+  const e5 = FX.detectEvents(base, n5).map(e => e.type);
+  assert.ok(e5.includes('deal') && e5.includes('turn'));
+}
+
 console.log('OK - todas las pruebas pasan. Partida simulada de', rounds + 1, 'rondas, gana',
   g.winners.map(i => g.players[i].name).join(', '));

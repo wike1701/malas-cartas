@@ -99,10 +99,159 @@
       '<span class="fig">' + (FIG[card.n] || '') + '</span><span class="idx br">' + card.n + '</span></' + tag + '>';
   }
 
-  function livesHTML(n) {
+  // Corazones; los `lost` recién perdidos se "rompen" con una animación.
+  function livesHTML(n, lost) {
     let s = '';
-    for (let i = 0; i < MC.START_LIVES; i++) s += i < n ? '♥' : '<span class="empty">♥</span>';
+    for (let i = 0; i < MC.START_LIVES; i++) {
+      if (i < n) s += '♥';
+      else s += '<span class="empty' + (lost && i < n + lost ? ' break' : '') + '">♥</span>';
+    }
     return s;
+  }
+
+  // ---------- Avatares ----------
+  let myAvatar = (() => { const a = store('mc-avatar'); return MCAV.isValidAvatar(a) ? a : MCAV.defaultAvatar(myCid); })();
+  let avatarOpen = false; // selector desplegado en la sala de espera
+  const av = (a, cls) => MCAV.avatarSvg(a, cls || '');
+
+  function avatarPicker() {
+    const photo = store('mc-photo');
+    const upload = '<button class="av-pick upload" data-act="photo" title="Subir una foto">📷</button>';
+    const mine = MCAV.isPhoto(photo)
+      ? '<button class="av-pick' + (photo === myAvatar ? ' sel' : '') + '" data-av="photo" title="Tu foto">' + av(photo) + '</button>' : '';
+    return '<div class="avatar-grid" role="group" aria-label="Elige tu avatar">' + upload + mine +
+      MCAV.AVATAR_IDS.map(id => '<button class="av-pick' + (id === myAvatar ? ' sel' : '') + '" data-av="' + id +
+        '" aria-pressed="' + (id === myAvatar) + '" title="' + esc(MCAV.AVATAR_NAMES[id]) + '">' + av(id) + '</button>').join('') +
+      '</div>';
+  }
+
+  function renderHomeAvatar() {
+    $('#my-avatar').innerHTML = av(myAvatar, 'big');
+    $('#avatar-pick').innerHTML = avatarPicker();
+  }
+
+  // Elige mi avatar y, si ya estoy en una sala, lo comunica.
+  function setMyAvatar(a) {
+    if (!MCAV.isValidAvatar(a)) return;
+    myAvatar = a;
+    store('mc-avatar', a);
+    renderHomeAvatar();
+    if (role) { avatarOpen = false; send({ t: 'avatar', avatar: a }); }
+  }
+
+  // Recorta la imagen en cuadrado y la comprime hasta que quepa en un mensaje.
+  async function photoFromFile(file) {
+    if (!file || !/^image\//.test(file.type || 'image/')) throw new Error('no es una imagen');
+    let src = null, url = null;
+    if (window.createImageBitmap) { try { src = await createImageBitmap(file); } catch (e) { src = null; } }
+    if (!src) {
+      url = URL.createObjectURL(file);
+      src = await new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = url; });
+    }
+    try {
+      const w = src.width, h = src.height, side = Math.min(w, h);
+      if (!side) throw new Error('imagen vacía');
+      for (const size of [128, 96, 64]) {
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const g = c.getContext('2d');
+        g.fillStyle = '#0c3d27';
+        g.fillRect(0, 0, size, size);
+        g.drawImage(src, (w - side) / 2, (h - side) / 2, side, side, 0, 0, size, size);
+        for (const q of [0.85, 0.7, 0.55]) {
+          const data = c.toDataURL('image/jpeg', q);
+          if (MCAV.isPhoto(data)) return data;
+        }
+      }
+      throw new Error('demasiado grande');
+    } finally {
+      if (src.close) src.close();
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+
+  // El selector de archivos vive fuera de lo que se repinta.
+  let photoInput = null;
+  function choosePhoto() {
+    if (!photoInput) {
+      photoInput = document.createElement('input');
+      photoInput.type = 'file';
+      photoInput.accept = 'image/*';
+      photoInput.hidden = true;
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files && photoInput.files[0];
+        photoInput.value = '';
+        if (!file) return;
+        try {
+          const data = await photoFromFile(file);
+          store('mc-photo', data);
+          setMyAvatar(data);
+        } catch (e) { toast('No se ha podido usar esa imagen'); }
+      });
+      document.body.appendChild(photoInput);
+    }
+    photoInput.click();
+  }
+
+  // ---------- Sonido y efectos ----------
+  let fx = {}; // efectos del repintado actual (se calculan al llegar cada vista nueva)
+
+  function renderMute() {
+    const m = MCSND.isMuted();
+    $('#btn-mute').textContent = m ? '🔇' : '🔊';
+    $('#btn-mute').title = m ? 'Activar sonido' : 'Silenciar';
+    $('#btn-mute').setAttribute('aria-pressed', String(m));
+  }
+
+  // Compara la vista anterior con la nueva: suena lo que toca y marca qué animar.
+  function applyView(next) {
+    const prev = view;
+    const events = MCFX.detectEvents(prev, next);
+    view = next;
+    fx = { bids: {}, lives: {}, out: {}, deal: false, trick: -1, over: false };
+    const S = MCSND.play;
+    let turnDelay = 0.15;
+    for (const e of events) {
+      if (e.type === 'join') S('join');
+      else if (e.type === 'deal') { fx.deal = true; S('deal', 0, e.n); turnDelay = 0.2 + e.n * 0.09; }
+      else if (e.type === 'bid') { fx.bids[e.pi] = true; S('bid'); }
+      else if (e.type === 'play') S('play');
+      else if (e.type === 'trick') { fx.trick = e.pi; S(e.mine ? 'trickMine' : 'trickOther', 0.25); }
+      else if (e.type === 'lives') { fx.lives[e.pi] = e.n; if (e.mine) S('lifeLost', 0.2); }
+      else if (e.type === 'out') { fx.out[e.pi] = true; S('eliminated', 0.5); }
+      else if (e.type === 'over') { fx.over = true; S(e.win ? 'victory' : 'defeat', 0.9); }
+      else if (e.type === 'turn') S('turn', turnDelay);
+    }
+    render();
+    if (fx.trick >= 0) later.set(sweepTrick, 1500);
+    fx = {}; // otros repintados (p. ej. abrir el selector) no repiten las animaciones
+  }
+
+  // Las cartas de la mesa se deslizan hacia el asiento de quien ganó la mini ronda.
+  function sweepTrick() {
+    if (!view || view.phase !== 'trickEnd' || !view.lastTrick) return;
+    const seat = $('#seats').children[view.lastTrick.winner];
+    if (!seat) return;
+    const to = seat.getBoundingClientRect();
+    $('#table').querySelectorAll('.play').forEach(el => {
+      const r = el.getBoundingClientRect();
+      const dx = to.left + to.width / 2 - (r.left + r.width / 2);
+      const dy = to.top + to.height / 2 - (r.top + r.height / 2);
+      el.classList.remove('new');
+      el.style.setProperty('--dx', dx + 'px');
+      el.style.setProperty('--dy', dy + 'px');
+      el.classList.add('sweep');
+    });
+  }
+
+  function confetti() {
+    const colors = ['#e9b949', '#e0505a', '#4a86d6', '#46a868', '#fffdf6'];
+    let s = '<div class="confetti" aria-hidden="true">';
+    for (let i = 0; i < 40; i++) {
+      s += '<i style="left:' + (Math.random() * 100).toFixed(1) + '%;background:' + colors[i % colors.length] +
+        ';animation-delay:' + (Math.random() * 0.8).toFixed(2) + 's;animation-duration:' + (2 + Math.random() * 1.5).toFixed(2) + 's"></i>';
+    }
+    return s + '</div>';
   }
 
   // ---------- Render ----------
@@ -124,8 +273,10 @@
         '<div class="row"><button class="btn" data-act="copy">Copiar enlace de invitación</button></div>' +
         '<p class="muted small">Pásales el código o el enlace a tus amigos. Máximo ' + MC.MAX_PLAYERS + ' jugadores.</p>' +
         '<ul class="lobby-list">' + v.players.map((p, i) =>
-          '<li><span>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</span><span class="muted small">' +
-          (i === 0 ? 'Anfitrión' : '') + '</span></li>').join('') + '</ul>' +
+          '<li><span class="who">' + av(p.avatar, 'sm') + '<span>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</span></span>' +
+          (i === v.me ? '<button class="btn small-btn" data-act="toggle-av" aria-expanded="' + avatarOpen + '">Cambiar avatar</button>' : '') +
+          '<span class="muted small">' + (i === 0 ? 'Anfitrión' : '') + '</span></li>').join('') + '</ul>' +
+        (avatarOpen ? avatarPicker() : '') +
         (isHost
           ? '<button class="btn primary big" data-act="start"' + (n < MC.MIN_PLAYERS ? ' disabled' : '') + '>' +
             (n < MC.MIN_PLAYERS ? 'Esperando jugadores…' : 'Empezar partida (' + n + ' jugadores)') + '</button>' +
@@ -147,17 +298,21 @@
       if (i === v.me) cls.push('me');
       if (i === v.turn) cls.push('turn');
       if (!p.alive) cls.push('dead');
+      if (fx.lives && fx.lives[i]) cls.push('shake');
+      if (fx.trick === i) cls.push('won-trick');
       const badges = (i === v.dealer && p.alive ? '<span class="badge">Reparte</span>' : '') +
         (!p.connected ? '<span class="badge off">Desconectado</span>' : '') +
-        (!p.alive ? '<span class="badge dead">Eliminado</span>' : '');
+        (!p.alive ? '<span class="badge dead' + (fx.out && fx.out[i] ? ' stamp' : '') + '">Eliminado</span>' : '');
       const bidTxt = p.bid === null ? '–' : p.bid;
       const ok = p.bid !== null && p.bid === p.won;
       const mini = v.blind && i !== v.me && p.hand && p.hand.length
         ? '<div class="mini-hand">' + p.hand.map(c => cardHTML(c, { sm: true })).join('') + '</div>' : '';
-      return '<div class="' + cls.join(' ') + '"><div class="seat-top"><span class="name">' + esc(p.name) +
+      return '<div class="' + cls.join(' ') + '"><div class="seat-head">' + av(p.avatar, 'seat-av') +
+        '<div class="seat-info"><div class="seat-top"><span class="name">' + esc(p.name) +
         (i === v.me ? ' (tú)' : '') + '</span>' + badges + '</div>' +
-        '<div class="lives" aria-label="' + p.lives + ' vidas">' + livesHTML(p.lives) + '</div>' +
-        (p.alive ? '<div class="score">Dice <b>' + bidTxt + '</b> · Lleva <b class="' + (ok ? 'ok' : '') + '">' + p.won + '</b></div>' : '') +
+        '<div class="lives" aria-label="' + p.lives + ' vidas">' + livesHTML(p.lives, fx.lives && fx.lives[i]) + '</div></div></div>' +
+        (p.alive ? '<div class="score">Dice <b class="' + (fx.bids && fx.bids[i] ? 'stamp' : '') + '">' + bidTxt +
+          '</b> · Lleva <b class="' + (ok ? 'ok' : '') + (fx.trick === i ? ' pop' : '') + '">' + p.won + '</b></div>' : '') +
         mini + '</div>';
     }).join('');
 
@@ -166,10 +321,10 @@
     const shown = $('#table').querySelectorAll('.play').length;
     $('#table').innerHTML = v.trick.length
       ? v.trick.map((t, i) => '<div class="play' + (i >= shown ? ' new' : '') + (t.pi === winner ? ' win' : '') + '">' + cardHTML(t.card) +
-          '<span>' + esc(v.players[t.pi].name) + '</span></div>').join('')
+          '<span class="who">' + av(v.players[t.pi].avatar, 'xs') + '<span>' + esc(v.players[t.pi].name) + '</span></span></div>').join('')
       : '<div class="table-empty">' + (v.phase === 'bidding'
           ? (v.blind ? 'Ronda de 1 carta: ves las de los demás, pero no la tuya' : 'Fase de apuestas')
-          : 'Mini ronda ' + (v.trickNum + 1) + ' de ' + v.cards) + '</div>';
+          : 'Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + ' de ' + v.cards) + '</div>';
 
     // Estado
     const myTurn = v.turn === v.me;
@@ -213,6 +368,8 @@
     }
     $('#hand').innerHTML = hand;
     $('#hand').classList.toggle('waiting', !canPlay);
+    $('#hand').classList.toggle('my-turn', canPlay);
+    if (fx.deal) Array.from($('#hand').children).forEach((el, i) => { el.classList.add('deal'); el.style.setProperty('--i', i); });
 
     renderLog(v);
     renderModal(v);
@@ -229,13 +386,15 @@
       if (v.phase === 'gameOver') {
         const names = v.winners.map(i => esc(v.players[i].name)).join(' y ');
         const iWin = v.winners.indexOf(v.me) >= 0;
-        html += '<h2>' + (iWin ? '¡Has ganado!' : 'Gana ' + names) + '</h2>';
+        html += (fx.over && iWin ? confetti() : '') +
+          '<div class="medals">' + v.winners.map(i => '<span class="medal">' + av(v.players[i].avatar, 'medal-av') + '</span>').join('') + '</div>' +
+          '<h2>' + (iWin ? '¡Has ganado!' : 'Gana ' + names) + '</h2>';
       } else {
         html += '<h2>Fin de la ronda ' + v.round + '</h2>';
       }
       if (v.summary) {
         html += '<table class="sum-table"><tr><th>Jugador</th><th>Dijo</th><th>Ganó</th><th>Pierde</th><th>Vidas</th></tr>' +
-          v.summary.map(s => '<tr><td>' + esc(v.players[s.pi].name) + '</td><td>' + s.bid + '</td><td>' + s.won +
+          v.summary.map(s => '<tr><td><span class="who">' + av(v.players[s.pi].avatar, 'xs') + '<span>' + esc(v.players[s.pi].name) + '</span></span></td><td>' + s.bid + '</td><td>' + s.won +
             '</td><td class="' + (s.lost ? 'lost' : 'zero') + '">' + (s.lost ? '−' + s.lost : '0') + '</td><td>' +
             (s.lives ? s.lives : 'Eliminado') + '</td></tr>').join('') + '</table>';
       }
@@ -267,7 +426,7 @@
     peer = new Peer(PREFIX + code);
     peer.on('open', () => {
       game = MC.createGame();
-      MC.addPlayer(game, myCid, myName);
+      MC.addPlayer(game, myCid, myName, myAvatar);
       sync();
       toast('Sala creada. Comparte el código ' + code);
       hostHeartbeat();
@@ -306,9 +465,10 @@
         if (old && old !== conn) { old.replaced = true; try { old.close(); } catch (e) { /* nada */ } }
         conns.set(id, conn);
         game.players[existing].connected = true;
+        if (MCAV.isValidAvatar(msg.avatar)) game.players[existing].avatar = msg.avatar;
         game.log.push(game.players[existing].name + ' se ha reconectado');
       } else {
-        try { MC.addPlayer(game, id, name); conns.set(id, conn); }
+        try { MC.addPlayer(game, id, name, msg.avatar); conns.set(id, conn); }
         catch (e) { sendTo(conn, { t: 'error', msg: e.message, fatal: true }); setTimeout(() => conn.close(), 500); return; }
       }
       sync();
@@ -320,6 +480,7 @@
     try {
       switch (msg.t) {
         case 'bid': MC.placeBid(game, pi, Number(msg.n)); break;
+        case 'avatar': MC.setAvatar(game, pi, msg.avatar); break;
         case 'play': {
           let id = msg.card;
           if (typeof id === 'string' && id[0] === '#') {
@@ -354,19 +515,26 @@
 
   function sync() {
     game.players.forEach((p, i) => {
-      if (p.cid === myCid) { view = MC.viewFor(game, i); }
-      else sendTo(conns.get(p.cid), { t: 'state', view: MC.viewFor(game, i), code });
+      if (p.cid !== myCid) sendTo(conns.get(p.cid), { t: 'state', view: MC.viewFor(game, i), code });
     });
-    render();
+    const mi = idxOf(myCid);
+    if (mi >= 0) applyView(MC.viewFor(game, mi));
     schedule();
   }
 
+  // Si el estado no ha cambiado, se respeta el temporizador pendiente: así un mensaje cualquiera
+  // (o alguien pulsando botones sin parar) no retrasa indefinidamente la siguiente mini ronda.
+  let timerKey = null;
   function schedule() {
+    const tp = game.players[game.turn];
+    const key = [game.phase, game.round, game.trickNum, game.turn, tp ? tp.connected : ''].join(':');
+    if (key === timerKey) return;
     later.clear(timer);
+    timerKey = key;
     if (game.phase === 'trickEnd') {
-      timer = later.set(() => { MC.advance(game); sync(); }, TRICK_PAUSE);
-    } else if ((game.phase === 'bidding' || game.phase === 'playing') && game.turn >= 0 && !game.players[game.turn].connected) {
-      timer = later.set(() => { MC.autoAction(game, game.turn); sync(); }, BOT_DELAY);
+      timer = later.set(() => { timerKey = null; MC.advance(game); sync(); }, TRICK_PAUSE);
+    } else if ((game.phase === 'bidding' || game.phase === 'playing') && game.turn >= 0 && !tp.connected) {
+      timer = later.set(() => { timerKey = null; MC.autoAction(game, game.turn); sync(); }, BOT_DELAY);
     }
   }
 
@@ -419,7 +587,7 @@
   function connectToHost() {
     hostConn = peer.connect(PREFIX + code, { reliable: true });
     hostConn.on('open', () => {
-      hostConn.send({ t: 'join', cid: myCid, name: myName });
+      hostConn.send({ t: 'join', cid: myCid, name: myName, avatar: myAvatar });
       history.replaceState(null, '', location.pathname + '?sala=' + code);
       modal(null);
       hostSeen = Date.now();
@@ -428,7 +596,7 @@
     hostConn.on('data', msg => {
       hostSeen = Date.now();
       if (msg.t === 'ping') { hostConn.send({ t: 'pong' }); return; }
-      if (msg.t === 'state') { view = msg.view; render(); }
+      if (msg.t === 'state') applyView(msg.view);
       else if (msg.t === 'error') {
         toast(msg.msg, 4000);
         if (msg.fatal) { leaving = true; resetToHome(); }
@@ -453,6 +621,7 @@
   function resetToHome() {
     leaving = true;
     later.clear(timer);
+    timerKey = null;
     try { if (peer) peer.destroy(); } catch (e) { /* nada */ }
     peer = null; hostConn = null; game = null; view = null; role = null; conns.clear();
     modal(null);
@@ -477,11 +646,15 @@
   document.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
-    if (b.dataset.bid !== undefined) send({ t: 'bid', n: Number(b.dataset.bid) });
+    if (b.dataset.av !== undefined) setMyAvatar(b.dataset.av === 'photo' ? store('mc-photo') : b.dataset.av);
+    else if (b.dataset.bid !== undefined) send({ t: 'bid', n: Number(b.dataset.bid) });
     else if (b.dataset.play !== undefined) send({ t: 'play', card: b.dataset.play });
     else if (b.dataset.act) {
       const a = b.dataset.act;
       if (a === 'copy') copyLink();
+      else if (a === 'photo') choosePhoto();
+      else if (a === 'toggle-av') { avatarOpen = !avatarOpen; render(); }
+      else if (a === 'mute') { MCSND.toggleMute(); renderMute(); }
       else if (a === 'leave') resetToHome();
       else if (a === 'reconnect') {
         modal(null);
@@ -514,8 +687,14 @@
     if (role === 'host' && game && game.players.length > 1) { e.preventDefault(); e.returnValue = ''; }
   });
 
+  // Los navegadores solo dejan sonar audio tras un gesto del usuario.
+  document.addEventListener('pointerdown', MCSND.unlock, true);
+  document.addEventListener('keydown', MCSND.unlock, true);
+
   // Arranque
   $('#name').value = store('mc-name') || '';
+  renderHomeAvatar();
+  renderMute();
   const params = new URLSearchParams(location.search);
   const sala = (params.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
   if (sala) {

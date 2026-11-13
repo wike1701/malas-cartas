@@ -11,6 +11,11 @@ Juego de cartas multijugador con la baraja española, para jugar en el navegador
 
 Si alguien se desconecta, el juego juega por él hasta que vuelva (recargando la página y uniéndose con el mismo código desde la misma pestaña).
 
+## Avatares, sonido y animaciones
+- Elige uno de los 16 personajes o sube tu propia foto (se recorta y comprime en el navegador). Se puede cambiar también en la sala de espera.
+- Efectos de sonido sintetizados (reparto, tirada, baza ganada, vidas perdidas, victoria…). Botón 🔊 arriba para silenciar; se recuerda.
+- Animaciones de reparto, cartas que caen a la mesa y se van hacia quien gana la baza, corazones que se rompen y medalla final. Se desactivan si el sistema pide reducir el movimiento.
+
 ## Reglas
 - Cada jugador tiene **5 vidas**.
 - Se reparten 5 cartas, luego 4, 3, 2, 1, se vuelve a subir hasta 5 y así hasta que solo quede uno.
@@ -24,4 +29,5 @@ Web estática (HTML/CSS/JS sin dependencias de compilación). La conexión entre
 
 - `game.js`: reglas del juego.
 - `app.js`: red e interfaz.
-- `test.js`: pruebas de las reglas (`node test.js`).
+- `avatars.js`, `sound.js`, `fx.js`: avatares, sonidos y detección de eventos para las animaciones (adaptados de secrethitlet).
+- `test.js`: pruebas de las reglas, avatares y eventos (`node test.js`).
