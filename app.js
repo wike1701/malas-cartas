@@ -6,6 +6,11 @@
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const TRICK_PAUSE = 2200;
   const BOT_DELAY = 2500;
+  const TV_ROUND_PAUSE = 15000; // en modo TV la siguiente ronda empieza sola
+
+  const URLP = new URLSearchParams(location.search);
+  // Modo TV: esta pantalla crea la sala y muestra la mesa, pero no juega. Se juega desde los móviles.
+  const TV = URLP.has('tv');
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -69,6 +74,7 @@
   function showScreen(id) {
     $('#home').classList.toggle('hidden', id !== 'home');
     $('#game').classList.toggle('hidden', id !== 'game');
+    $('#tv').classList.toggle('hidden', id !== 'tv');
   }
   function modal(html) {
     if (!html) { $('#modal').classList.add('hidden'); return; }
@@ -77,6 +83,16 @@
   }
   function inviteLink() {
     return location.origin + location.pathname + '?sala=' + code;
+  }
+  // Código QR (SVG) con el enlace de invitación. Si la librería no ha cargado, nada.
+  function qrSVG(text) {
+    if (typeof qrcode === 'undefined') return '';
+    try {
+      const q = qrcode(0, 'M');
+      q.addData(text);
+      q.make();
+      return q.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
+    } catch (e) { return ''; }
   }
 
   // Símbolos de los palos dibujados en una caja de 40×40.
@@ -259,9 +275,11 @@
 
   function renderMute() {
     const m = MCSND.isMuted();
-    $('#btn-mute').textContent = m ? '🔇' : '🔊';
-    $('#btn-mute').title = m ? 'Activar sonido' : 'Silenciar';
-    $('#btn-mute').setAttribute('aria-pressed', String(m));
+    document.querySelectorAll('.mute-btn').forEach(b => {
+      b.textContent = m ? '🔇' : '🔊';
+      b.title = m ? 'Activar sonido' : 'Silenciar';
+      b.setAttribute('aria-pressed', String(m));
+    });
   }
 
   // Compara la vista anterior con la nueva: suena lo que toca y marca qué animar.
@@ -278,9 +296,9 @@
       else if (e.type === 'bid') { fx.bids[e.pi] = true; S('bid'); }
       else if (e.type === 'play') S('play');
       else if (e.type === 'trick') { fx.trick = e.pi; S(e.mine ? 'trickMine' : 'trickOther', 0.25); }
-      else if (e.type === 'lives') { fx.lives[e.pi] = e.n; if (e.mine) S('lifeLost', 0.2); }
+      else if (e.type === 'lives') { fx.lives[e.pi] = e.n; if (e.mine || TV) S('lifeLost', 0.2); }
       else if (e.type === 'out') { fx.out[e.pi] = true; S('eliminated', 0.5); }
-      else if (e.type === 'over') { fx.over = true; S(e.win ? 'victory' : 'defeat', 0.9); }
+      else if (e.type === 'over') { fx.over = true; S(e.win || TV ? 'victory' : 'defeat', 0.9); }
       else if (e.type === 'turn') S('turn', turnDelay);
     }
     render();
@@ -291,10 +309,10 @@
   // Las cartas de la mesa se deslizan hacia el asiento de quien ganó la mini ronda.
   function sweepTrick() {
     if (!view || view.phase !== 'trickEnd' || !view.lastTrick) return;
-    const seat = $('#seats').children[view.lastTrick.winner];
+    const seat = $(TV ? '#tv-seats' : '#seats').children[view.lastTrick.winner];
     if (!seat) return;
     const to = seat.getBoundingClientRect();
-    $('#table').querySelectorAll('.play').forEach(el => {
+    $(TV ? '#tv-table' : '#table').querySelectorAll('.play').forEach(el => {
       const r = el.getBoundingClientRect();
       const dx = to.left + to.width / 2 - (r.left + r.width / 2);
       const dy = to.top + to.height / 2 - (r.top + r.height / 2);
@@ -318,9 +336,13 @@
   // ---------- Render ----------
   function render() {
     if (!view) return;
+    if (TV) { renderTV(); return; }
     const v = view;
     const me = v.players[v.me];
     const isHost = role === 'host';
+    const canLead = isHost || v.leader; // en modo TV manda el primer jugador
+    const leadIdx = v.players.findIndex(p => p.connected);
+    const leaderName = leadIdx >= 0 ? v.players[leadIdx].name : '';
     $('#btn-code').textContent = code;
     showScreen('game');
 
@@ -329,20 +351,24 @@
       $('#table-wrap').classList.add('hidden');
       $('#round-info').textContent = 'Sala de espera';
       const n = v.players.length;
+      const qr = isHost ? qrSVG(inviteLink()) : '';
       $('#lobby').innerHTML =
+        (v.tv ? '<p class="tv-hint">📺 Estás en la sala de la tele. La mesa se ve en la pantalla y tus cartas, aquí.</p>' : '') +
         '<p class="muted">Código de la sala</p><p class="big-code">' + esc(code) + '</p>' +
+        (qr ? '<div class="lobby-qr" title="Escanéalo con el móvil para unirte">' + qr + '</div>' : '') +
         '<div class="row"><button class="btn" data-act="copy">Copiar enlace de invitación</button></div>' +
-        '<p class="muted small">Pásales el código o el enlace a tus amigos. Máximo ' + MC.MAX_PLAYERS + ' jugadores.</p>' +
+        '<p class="muted small">Pásales el código o el enlace a tus amigos' + (qr ? ', o que escaneen el QR' : '') + '. Máximo ' + MC.MAX_PLAYERS + ' jugadores.</p>' +
         '<ul class="lobby-list">' + v.players.map((p, i) =>
           '<li><span class="who">' + av(p.avatar, 'sm') + '<span>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</span></span>' +
           (i === v.me ? '<button class="btn small-btn" data-act="toggle-av" aria-expanded="' + avatarOpen + '">Cambiar avatar</button>' : '') +
-          '<span class="muted small">' + (i === 0 ? 'Anfitrión' : '') + '</span></li>').join('') + '</ul>' +
+          '<span class="muted small">' + (v.tv ? (i === leadIdx ? '👑 Manda' : '') : (i === 0 ? 'Anfitrión' : '')) + '</span></li>').join('') + '</ul>' +
         (avatarOpen ? avatarPicker() : '') +
-        (isHost
+        (canLead
           ? '<button class="btn primary big" data-act="start"' + (n < MC.MIN_PLAYERS ? ' disabled' : '') + '>' +
             (n < MC.MIN_PLAYERS ? 'Esperando jugadores…' : 'Empezar partida (' + n + ' jugadores)') + '</button>' +
-            '<p class="muted small">No cierres esta pestaña: la partida vive en tu navegador.</p>'
-          : '<p class="muted">Esperando a que el anfitrión empiece la partida…</p>');
+            (v.tv ? '<p class="muted small">👑 Eres el primero de la sala: tú decides cuándo empezar (también se puede con el mando de la tele).</p>'
+              : '<p class="muted small">No cierres esta pestaña: la partida vive en tu navegador.</p>')
+          : '<p class="muted">' + (v.tv ? 'Esperando a que ' + esc(leaderName) + ' empiece la partida…' : 'Esperando a que el anfitrión empiece la partida…') + '</p>');
       renderLog(v);
       modal(null);
       return;
@@ -441,13 +467,14 @@
   }
 
   function renderModal(v) {
-    const isHost = role === 'host';
+    const isHost = role === 'host' || v.leader;
+    const tvGuest = v.tv && role !== 'host';
     if (v.phase === 'roundEnd' || v.phase === 'gameOver') {
       let html = '';
       if (v.phase === 'gameOver') {
         const names = v.winners.map(i => esc(v.players[i].name)).join(' y ');
         const iWin = v.winners.indexOf(v.me) >= 0;
-        html += (fx.over && iWin ? confetti() : '') +
+        html += (fx.over && (iWin || TV) ? confetti() : '') +
           '<div class="medals">' + v.winners.map(i => '<span class="medal">' + av(v.players[i].avatar, 'medal-av') + '</span>').join('') + '</div>' +
           '<h2>' + (iWin ? '¡Has ganado!' : 'Gana ' + names) + '</h2>';
       } else {
@@ -459,18 +486,138 @@
             '</td><td class="' + (s.lost ? 'lost' : 'zero') + '">' + (s.lost ? '−' + s.lost : '0') + '</td><td>' +
             (s.lives ? s.lives : 'Eliminado') + '</td></tr>').join('') + '</table>';
       }
+      const auto = TV || tvGuest ? '<p class="muted small" style="text-align:center">La siguiente ronda empieza sola en unos segundos.</p>' : '';
       if (v.phase === 'roundEnd') {
-        html += isHost ? '<div class="row"><button class="btn primary big" data-act="next">Siguiente ronda</button></div>'
-          : '<p class="muted" style="text-align:center">Esperando a que el anfitrión pase de ronda…</p>';
+        html += isHost ? '<div class="row"><button class="btn primary big" data-act="next">Siguiente ronda</button></div>' + auto
+          : (auto || '<p class="muted" style="text-align:center">Esperando a que el anfitrión pase de ronda…</p>');
       } else {
-        html += '<div class="row">' + (isHost ? '<button class="btn primary" data-act="again">Otra partida</button>' : '') +
-          '<button class="btn" data-act="leave">Salir</button></div>' +
-          (isHost ? '' : '<p class="muted small" style="text-align:center">El anfitrión puede empezar otra partida.</p>');
+        html += '<div class="row">' + (isHost ? '<button class="btn primary' + (TV ? ' big' : '') + '" data-act="again">Otra partida</button>' : '') +
+          (TV ? '' : '<button class="btn" data-act="leave">Salir</button>') + '</div>' +
+          (isHost ? '' : '<p class="muted small" style="text-align:center">' + (tvGuest ? 'El primero de la sala o el mando de la tele pueden empezar otra partida.' : 'El anfitrión puede empezar otra partida.') + '</p>');
       }
       modal(html);
     } else {
       modal(null);
     }
+  }
+
+  // ---------- Pantalla de la tele ----------
+  function tvSeats(v) {
+    return v.players.map((p, i) => {
+      const cls = ['tv-seat'];
+      if (i === v.turn) cls.push('turn');
+      if (!p.alive) cls.push('dead');
+      if (fx.lives && fx.lives[i]) cls.push('shake');
+      if (fx.trick === i) cls.push('won-trick');
+      const badges = (i === v.dealer && p.alive ? '<span class="badge">Reparte</span>' : '') +
+        (!p.connected ? '<span class="badge off">Desconectado</span>' : '') +
+        (!p.alive ? '<span class="badge dead' + (fx.out && fx.out[i] ? ' stamp' : '') + '">Eliminado</span>' : '');
+      const ok = p.bid !== null && p.bid === p.won;
+      let backs = '';
+      for (let k = 0; k < (p.alive ? p.handCount : 0); k++) backs += '<span class="tv-back"></span>';
+      return '<div class="' + cls.join(' ') + '">' + av(p.avatar, 'tv-av') +
+        '<div class="tv-name">' + esc(p.name) + '</div><div class="tv-badges">' + badges + '</div>' +
+        '<div class="lives" aria-label="' + p.lives + ' vidas">' + livesHTML(p.lives, fx.lives && fx.lives[i]) + '</div>' +
+        (p.alive ? '<div class="tv-score">Dice <b class="' + (fx.bids && fx.bids[i] ? 'stamp' : '') + '">' + (p.bid === null ? '–' : p.bid) +
+          '</b> · Lleva <b class="' + (ok ? 'ok' : '') + (fx.trick === i ? ' pop' : '') + '">' + p.won + '</b></div>' : '') +
+        '<div class="tv-backs" aria-label="' + p.handCount + ' cartas">' + backs + '</div></div>';
+    }).join('');
+  }
+
+  function renderTV() {
+    const v = view;
+    showScreen('tv');
+    const lobby = v.phase === 'lobby';
+    $('#tv-lobby').classList.toggle('hidden', !lobby);
+    $('#tv-game').classList.toggle('hidden', lobby);
+
+    if (lobby) {
+      const n = v.players.length;
+      const link = inviteLink();
+      const lead = v.players.findIndex(p => p.connected);
+      $('#tv-lobby').innerHTML =
+        '<div class="tv-qr">' + (qrSVG(link) || '<p>' + esc(link) + '</p>') + '</div>' +
+        '<div class="tv-info">' +
+          '<h1>Malas Cartas</h1>' +
+          '<p class="tv-lead">Escanea el código con el móvil para unirte</p>' +
+          '<p class="muted">o entra en <b>' + esc(location.host + location.pathname) + '</b> y escribe el código</p>' +
+          '<p class="big-code">' + esc(code) + '</p>' +
+          (n ? '<ul class="tv-players">' + v.players.map((p, i) => '<li>' + av(p.avatar, 'tv-av') + '<span>' + (i === lead ? '👑 ' : '') + esc(p.name) + '</span></li>').join('') + '</ul>'
+            : '<p class="tv-empty">Aún no hay nadie. ¡Sé el primero!</p>') +
+          '<div class="row"><button class="btn primary big" data-act="start"' + (n < MC.MIN_PLAYERS ? ' disabled' : '') + '>' +
+            (n < MC.MIN_PLAYERS ? 'Hacen falta al menos ' + MC.MIN_PLAYERS + ' jugadores' : 'Empezar partida (' + n + ' jugadores)') + '</button>' +
+            '<button class="icon-btn mute-btn" data-act="mute"></button></div>' +
+          '<p class="muted small">De ' + MC.MIN_PLAYERS + ' a ' + MC.MAX_PLAYERS + ' jugadores. 👑 El primero en unirse también puede empezar desde su móvil.</p>' +
+        '</div>';
+      renderMute();
+      modal(null);
+      tvFocus();
+      return;
+    }
+
+    const turnName = v.turn >= 0 ? esc(v.players[v.turn].name) : '';
+    $('#tv-round').textContent = 'Ronda ' + v.round + ' · ' + v.cards + (v.cards === 1 ? ' carta' : ' cartas') +
+      (v.phase === 'playing' || v.phase === 'trickEnd' ? ' · Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + ' de ' + v.cards : '');
+    $('#tv-code').textContent = 'Sala ' + code;
+    $('#tv-seats').innerHTML = tvSeats(v);
+    $('#tv-seats').style.setProperty('--n', v.players.length);
+
+    const winner = v.lastTrick ? v.lastTrick.winner : -1;
+    const shown = $('#tv-table').querySelectorAll('.play').length;
+    const sum = v.players.reduce((s, p) => s + (p.bid || 0), 0);
+    $('#tv-table').innerHTML = v.trick.length
+      ? v.trick.map((t, i) => '<div class="play' + (i >= shown ? ' new' : '') + (t.pi === winner ? ' win' : '') + '">' + cardHTML(t.card) +
+          '<span class="who">' + av(v.players[t.pi].avatar, 'sm') + '<span>' + esc(v.players[t.pi].name) + '</span></span></div>').join('')
+      : '<div class="table-empty">' + (v.phase === 'bidding'
+          ? (v.blind ? '<b>Ronda de 1 carta</b><br>Cada uno ve en su móvil las cartas de los demás, pero no la suya' : '<b>Apuestas</b>') +
+            '<br><span class="tv-sum">Llevan dicho ' + sum + ' de ' + v.cards + '</span>'
+          : 'Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + ' de ' + v.cards) + '</div>';
+
+    let status = '';
+    if (v.phase === 'bidding') status = turnName + ' está pensando cuántas va a ganar…' +
+      (v.forbidden !== null ? ' <span class="tv-forb">(no puede decir ' + v.forbidden + ')</span>' : '');
+    else if (v.phase === 'playing') status = 'Turno de ' + turnName;
+    else if (v.phase === 'trickEnd') status = esc(v.players[winner].name) + ' gana la mini ronda';
+    else if (v.phase === 'roundEnd') status = 'Fin de la ronda';
+    $('#tv-status').innerHTML = status;
+
+    renderModal(v);
+    tvFocus();
+  }
+
+  // Con el mando: el botón principal visible recibe el foco si nada lo tiene.
+  function visibleButtons() {
+    const scope = $('#modal').classList.contains('hidden') ? document : $('#modal');
+    return Array.from(scope.querySelectorAll('button')).filter(b => !b.disabled && b.getClientRects().length);
+  }
+  function tvFocus() {
+    const btns = visibleButtons();
+    if (btns.indexOf(document.activeElement) >= 0) return;
+    const main = btns.find(b => b.classList.contains('primary'));
+    if (main) main.focus({ preventScroll: true });
+  }
+  function tvKeys(e) {
+    const dir = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+    if (!dir) return;
+    const btns = visibleButtons();
+    if (!btns.length) return;
+    e.preventDefault();
+    const i = btns.indexOf(document.activeElement);
+    btns[i < 0 ? 0 : (i + dir + btns.length) % btns.length].focus();
+  }
+
+  function tvError(msg) {
+    showScreen('tv');
+    $('#tv-game').classList.add('hidden');
+    $('#tv-lobby').classList.remove('hidden');
+    $('#tv-lobby').innerHTML = '<div class="tv-info"><h1>Malas Cartas</h1><p class="tv-lead">' + esc(msg) + '</p>' +
+      '<div class="row"><button class="btn primary big" data-act="tv-retry">Reintentar</button></div></div>';
+    tvFocus();
+  }
+
+  function tvLoading() {
+    tvError('Creando sala…');
+    $('#tv-lobby .row').remove();
   }
 
   // ---------- Anfitrión ----------
@@ -487,9 +634,9 @@
     peer = new Peer(PREFIX + code);
     peer.on('open', () => {
       game = MC.createGame();
-      MC.addPlayer(game, myCid, myName, myAvatar);
+      if (!TV) MC.addPlayer(game, myCid, myName, myAvatar);
       sync();
-      toast('Sala creada. Comparte el código ' + code);
+      toast(TV ? 'Sala lista. Escanead el código para uniros' : 'Sala creada. Comparte el código ' + code);
       hostHeartbeat();
     });
     peer.on('connection', conn => {
@@ -502,11 +649,16 @@
     peer.on('error', e => {
       if (e.type === 'unavailable-id' && !game) { peer.destroy(); createRoom(); return; }
       if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') toast('Problema de conexión con el servidor. Reintentando…');
-      else if (!game) { toast('No se pudo crear la sala: ' + e.type); resetToHome(); }
+      else if (!game) {
+        if (TV) { try { peer.destroy(); } catch (x) { /* nada */ } tvError('No se ha podido crear la sala (' + e.type + '). Revisa la conexión a internet.'); }
+        else { toast('No se pudo crear la sala: ' + e.type); resetToHome(); }
+      }
     });
   }
 
   function idxOf(cid) { return game.players.findIndex(p => p.cid === cid); }
+  // En modo TV manda (empezar, siguiente ronda, otra partida) el primer jugador conectado.
+  function leaderIdx() { return TV && game ? game.players.findIndex(p => p.connected) : -1; }
 
   function sendTo(conn, msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) { /* conexión caída */ } }
 
@@ -537,7 +689,9 @@
     }
 
     const pi = idxOf(cid);
-    if (pi < 0) return;
+    if (pi < 0 && !fromHost) return;
+    const lead = fromHost || (pi >= 0 && pi === leaderIdx());
+    if (pi < 0 && ['start', 'next', 'again'].indexOf(msg.t) < 0) return; // la tele no juega
     try {
       switch (msg.t) {
         case 'bid': MC.placeBid(game, pi, Number(msg.n)); break;
@@ -551,9 +705,9 @@
           MC.playCard(game, pi, id);
           break;
         }
-        case 'start': if (fromHost) MC.startGame(game); break;
-        case 'next': if (fromHost && game.phase === 'roundEnd') MC.advance(game); break;
-        case 'again': if (fromHost && game.phase === 'gameOver') MC.backToLobby(game); break;
+        case 'start': if (lead && game.phase === 'lobby') MC.startGame(game); break;
+        case 'next': if (lead && game.phase === 'roundEnd') MC.advance(game); break;
+        case 'again': if (lead && game.phase === 'gameOver') MC.backToLobby(game); break;
         default: return;
       }
     } catch (e) {
@@ -575,11 +729,18 @@
   }
 
   function sync() {
+    const lead = leaderIdx();
     game.players.forEach((p, i) => {
-      if (p.cid !== myCid) sendTo(conns.get(p.cid), { t: 'state', view: MC.viewFor(game, i), code });
+      if (p.cid === myCid) return;
+      const v = MC.viewFor(game, i);
+      if (TV) { v.tv = true; v.leader = i === lead; }
+      sendTo(conns.get(p.cid), { t: 'state', view: v, code });
     });
-    const mi = idxOf(myCid);
-    if (mi >= 0) applyView(MC.viewFor(game, mi));
+    if (TV) applyView(MC.tableView(game));
+    else {
+      const mi = idxOf(myCid);
+      if (mi >= 0) applyView(MC.viewFor(game, mi));
+    }
     schedule();
   }
 
@@ -596,6 +757,8 @@
       timer = later.set(() => { timerKey = null; MC.advance(game); sync(); }, TRICK_PAUSE);
     } else if ((game.phase === 'bidding' || game.phase === 'playing') && game.turn >= 0 && !tp.connected) {
       timer = later.set(() => { timerKey = null; MC.autoAction(game, game.turn); sync(); }, BOT_DELAY);
+    } else if (TV && game.phase === 'roundEnd') {
+      timer = later.set(() => { timerKey = null; if (game.phase === 'roundEnd') { MC.advance(game); sync(); } }, TV_ROUND_PAUSE);
     }
   }
 
@@ -717,6 +880,7 @@
       else if (a === 'toggle-av') { avatarOpen = !avatarOpen; render(); }
       else if (a === 'mute') { MCSND.toggleMute(); renderMute(); }
       else if (a === 'leave') resetToHome();
+      else if (a === 'tv-retry') { tvLoading(); createRoom(); }
       else if (a === 'reconnect') {
         modal(null);
         if (peer && !peer.destroyed && !peer.disconnected) connectToHost();
@@ -726,6 +890,7 @@
   });
 
   $('#btn-code').addEventListener('click', copyLink);
+  if (TV) document.addEventListener('keydown', tvKeys);
 
   $('#btn-create').addEventListener('click', () => {
     const n = readName(); if (!n) return;
@@ -745,7 +910,7 @@
   $('#code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 
   window.addEventListener('beforeunload', e => {
-    if (role === 'host' && game && game.players.length > 1) { e.preventDefault(); e.returnValue = ''; }
+    if (!TV && role === 'host' && game && game.players.length > 1) { e.preventDefault(); e.returnValue = ''; }
   });
 
   // Los navegadores solo dejan sonar audio tras un gesto del usuario.
@@ -756,8 +921,14 @@
   $('#name').value = store('mc-name') || '';
   renderHomeAvatar();
   renderMute();
-  const params = new URLSearchParams(location.search);
-  const sala = (params.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+  if (TV) {
+    document.documentElement.classList.add('tv');
+    document.title = 'Malas Cartas · TV';
+    if (typeof Peer === 'undefined') tvError('No se ha podido cargar la conexión. Revisa que la tele tenga internet.');
+    else { tvLoading(); createRoom(); }
+    return;
+  }
+  const sala = (URLP.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
   if (sala) {
     $('#code').value = sala;
     toast('Te han invitado a la sala ' + sala + '. Escribe tu nombre y pulsa Unirse.', 5000);

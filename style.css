@@ -227,6 +227,72 @@ img.avatar { object-fit: cover; }
 .confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 16px; }
 .confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: fall linear both; }
 @keyframes fall { to { transform: translateY(520px) rotate(540deg); opacity: .2; } }
+/* QR en la sala de espera del anfitrión */
+.lobby-qr { width: 184px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.lobby-qr svg, .tv-qr svg { display: block; width: 100%; height: auto; }
+.tv-hint { margin: 0; background: rgba(0,0,0,.25); border: 1px solid rgba(233,185,73,.5); border-radius: 10px; padding: 10px 12px; }
+
+/* ---------- Modo TV: todo en rem, y el rem depende de la altura de la pantalla ---------- */
+html.tv { font-size: 2.9vh; }
+html.tv body { overflow: hidden; }
+.tv .toast { font-size: 1rem; bottom: 1.5rem; }
+.tv button:focus, .tv button:focus-visible { outline: .22rem solid #fff; outline-offset: .2rem; }
+.tv .icon-btn { font-size: 1.4rem; }
+
+.tv-lobby { height: 100vh; display: flex; align-items: center; justify-content: center; gap: 4rem; padding: 2rem 4rem; }
+.tv-qr { flex: none; width: 62vh; background: #fff; border-radius: 1.2rem; padding: 1rem; box-shadow: 0 1rem 3rem rgba(0,0,0,.45); color: #222; word-break: break-all; }
+.tv-info { display: flex; flex-direction: column; gap: .9rem; max-width: 36rem; min-width: 0; text-align: center; }
+.tv-info h1 { font-size: 3.2rem; }
+.tv-info p { margin: 0; }
+.tv-lead { font-size: 1.5rem; font-weight: 700; }
+.tv-info .big-code { font-size: 3.6rem; }
+.tv-info .btn.big { font-size: 1.3rem; padding: .8rem 1.6rem; border-radius: .7rem; }
+.tv-empty { color: var(--muted); font-size: 1.2rem; }
+.tv-players { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: .7rem 1.2rem; }
+.tv-players li { display: flex; flex-direction: column; align-items: center; gap: .3rem; font-weight: 700; font-size: 1.05rem; animation: drop .45s cubic-bezier(.2,.9,.3,1.2) both; }
+.avatar.tv-av { width: 3.2rem; height: 3.2rem; box-shadow: 0 0 0 .15rem rgba(255,255,255,.2); }
+
+.tv-game { height: 100vh; display: flex; flex-direction: column; gap: .8rem; padding: 0 1.5rem 1rem; }
+.tv-top { display: flex; align-items: center; gap: 1rem; padding: .5rem 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+.tv-top .brand { font-size: 1.3rem; }
+.tv-round { flex: 1; text-align: center; font-size: 1.15rem; color: var(--muted); }
+.tv-top .code-chip { font-size: .9rem; }
+.tv-seats { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: .8rem; }
+.tv-seat {
+  background: rgba(0,0,0,.25); border: .15rem solid transparent; border-radius: 1rem; padding: .6rem .5rem;
+  display: flex; flex-direction: column; align-items: center; gap: .2rem; min-width: 0; text-align: center;
+}
+.tv-seat.turn { border-color: var(--gold); box-shadow: 0 0 1.2rem rgba(233,185,73,.5); background: rgba(0,0,0,.38); }
+.tv-seat.turn .avatar { box-shadow: 0 0 0 .18rem var(--gold); }
+.tv-seat.dead { opacity: .45; }
+.tv-seat.dead .avatar { filter: grayscale(1); }
+.tv-seat.won-trick { animation: winGlow 1.2s ease both; }
+.tv-seat.shake { animation: shake .5s ease both; animation-delay: .2s; }
+.tv-name { font-weight: 800; font-size: 1.1rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-badges { display: flex; gap: .3rem; min-height: 1rem; }
+.tv-badges .badge { font-size: .65rem; padding: .05rem .4rem; }
+.tv-seat .lives { font-size: 1.1rem; }
+.tv-score { color: var(--muted); font-size: .95rem; }
+.tv-score b { color: var(--ink); font-size: 1.15rem; }
+.tv-score .ok { color: #8be0a4; }
+.tv-backs { display: flex; gap: .2rem; min-height: 1.2rem; }
+.tv-back { width: .8rem; height: 1.2rem; border-radius: .15rem; background: linear-gradient(160deg, #b02a35, #7c1820); border: .1rem solid #fbf6e8; }
+.tv-table { flex: 1; min-height: 0; border-radius: 4rem; gap: 1.4rem; padding: 1rem; }
+.tv-table .play { font-size: 1rem; gap: .4rem; color: var(--ink); font-weight: 700; }
+.tv-table .play .card { width: 7.4rem; height: 11.1rem; border-radius: .7rem; }
+.tv-table .table-empty { font-size: 1.4rem; text-align: center; line-height: 1.5; }
+.tv-sum { color: var(--gold); font-weight: 700; }
+.tv-status { text-align: center; font-size: 1.5rem; font-weight: 700; min-height: 2rem; }
+.tv-forb { color: var(--muted); font-weight: 600; font-size: 1.1rem; }
+.tv .modal-body { max-width: 34rem; font-size: 1.05rem; padding: 1.4rem; border-radius: 1.2rem; gap: 1rem; }
+.tv .modal-body h2 { font-size: 2rem; }
+.tv .sum-table { font-size: 1.05rem; }
+.tv .sum-table th, .tv .sum-table td { padding: .35rem .3rem; }
+.tv .avatar.xs { width: 1.4rem; height: 1.4rem; }
+.tv .avatar.medal-av { width: 6rem; height: 6rem; }
+.tv .modal-body .btn.big { font-size: 1.2rem; padding: .7rem 1.4rem; }
+.tv .confetti i { width: .5rem; height: .75rem; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

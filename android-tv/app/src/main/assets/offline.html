@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html { font-size: 2.9vh; }
+  body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-family: sans-serif; color: #f4f1e8; background: radial-gradient(ellipse at center, #1d7a50 0%, #145a3a 45%, #0c3d27 100%); }
+  h1 { font-family: Georgia, serif; color: #e9b949; font-size: 3rem; margin: 0 0 1rem; }
+  p { font-size: 1.3rem; margin: 0 0 1.5rem; color: #b9cfc2; }
+  button { font: inherit; font-size: 1.3rem; font-weight: 700; padding: .8rem 1.6rem; border-radius: .7rem; border: none;
+    background: #e9b949; color: #3a2a00; }
+  button:focus { outline: .22rem solid #fff; outline-offset: .2rem; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>Malas Cartas</h1>
+    <p>No hay conexión a internet.<br>Comprueba que la tele está conectada a la red y vuelve a intentarlo.</p>
+    <button id="retry" onclick="MalasCartas.retry()" autofocus>Reintentar</button>
+  </div>
+  <script>document.getElementById('retry').focus();</script>
+</body>
+</html>

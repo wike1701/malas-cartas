@@ -51,7 +51,7 @@
     <header class="topbar">
       <div class="brand">Malas Cartas</div>
       <div id="round-info" class="round-info"></div>
-      <button id="btn-mute" class="icon-btn" data-act="mute" title="Silenciar">🔊</button>
+      <button id="btn-mute" class="icon-btn mute-btn" data-act="mute" title="Silenciar">🔊</button>
       <button id="btn-code" class="code-chip" title="Copiar enlace de invitación"></button>
     </header>
 
@@ -71,10 +71,26 @@
     </details>
   </main>
 
+  <main id="tv" class="screen hidden">
+    <section id="tv-lobby" class="tv-lobby"></section>
+    <section id="tv-game" class="tv-game hidden">
+      <header class="tv-top">
+        <div class="brand">Malas Cartas</div>
+        <div id="tv-round" class="tv-round"></div>
+        <div id="tv-code" class="code-chip"></div>
+        <button class="icon-btn mute-btn" data-act="mute"></button>
+      </header>
+      <div id="tv-seats" class="tv-seats"></div>
+      <div id="tv-table" class="table tv-table"></div>
+      <div id="tv-status" class="tv-status"></div>
+    </section>
+  </main>
+
   <div id="modal" class="modal hidden"><div id="modal-body" class="modal-body"></div></div>
   <div id="toast" class="toast hidden"></div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="vendor/qrcode.js"></script>
   <script src="avatars.js"></script>
   <script src="sound.js"></script>
   <script src="fx.js"></script>

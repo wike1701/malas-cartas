@@ -33,6 +33,8 @@ assert.strictEqual(g.phase, 'playing');
 // Vista: no se ven cartas ajenas en ronda normal
 const v = MC.viewFor(g, 1);
 assert.ok(v.players[1].hand && v.players[0].hand === null);
+// Vista de la tele: ninguna mano a la vista
+assert.ok(MC.tableView(g).players.every(p => p.hand === null && p.handCount >= 0));
 
 let rounds = 0;
 while (g.phase !== 'gameOver' && rounds < 200) {
@@ -46,6 +48,7 @@ while (g.phase !== 'gameOver' && rounds < 200) {
     const bv = MC.viewFor(g, 0);
     assert.strictEqual(bv.players[0].hand, null, 'ronda de 1: no ves la tuya');
     assert.ok(bv.players[1].hand.length === 1 || !g.players[1].alive, 'ronda de 1: ves las de otros');
+    assert.ok(MC.tableView(g).players.every(p => p.hand === null), 'ronda de 1: la tele no enseña cartas');
   }
 }
 assert.strictEqual(g.phase, 'gameOver');

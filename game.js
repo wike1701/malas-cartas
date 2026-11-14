@@ -264,11 +264,20 @@
     };
   }
 
+  // Vista pública para la pantalla compartida (modo TV): la ven todos, así que nunca muestra
+  // ninguna mano, ni siquiera en la ronda de 1 carta. Sí muestra el número prohibido.
+  function tableView(g) {
+    const v = viewFor(g, -1);
+    v.forbidden = forbiddenBid(g);
+    v.players.forEach(p => { p.hand = null; });
+    return v;
+  }
+
   const api = {
     SUITS, NUMS, MAX_PLAYERS, MIN_PLAYERS, START_LIVES, MAX_CARDS,
     makeDeck, shuffle, rank, trickWinner, nextCardCount, createGame, addPlayer, setAvatar, removePlayer,
     aliveIdx, nextAlive, startGame, startRound, forbiddenBid, placeBid, playCard, advance,
-    endRound, backToLobby, autoAction, viewFor,
+    endRound, backToLobby, autoAction, viewFor, tableView,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MC = api;
