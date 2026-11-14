@@ -9,7 +9,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="rotate" class="rotate hidden" role="dialog" aria-label="Gira el móvil">
+    <div class="rotate-box">
+      <div class="rotate-icon" aria-hidden="true">📱</div>
+      <h2>Gira el móvil</h2>
+      <p>En la partida con tele, el móvil es tu mando: se juega en horizontal.</p>
+      <button class="btn primary big fs-only hidden" data-act="landscape">Pantalla completa en horizontal</button>
+      <button class="btn" data-act="portrait-ok">Seguir en vertical</button>
+    </div>
+  </div>
+
   <main id="home" class="screen">
+    <button class="icon-btn fs-btn fs-float hidden" data-act="fullscreen" title="Pantalla completa">⛶</button>
     <div class="home-box">
       <h1>Malas Cartas</h1>
       <p class="tag">Baraja española · 2 a 6 jugadores · 5 vidas</p>
@@ -53,11 +64,20 @@
       <div id="round-info" class="round-info"></div>
       <button id="btn-emote" class="icon-btn hidden" data-act="emote-menu" title="Emoticonos" aria-expanded="false">😀</button>
       <button id="btn-mute" class="icon-btn mute-btn" data-act="mute" title="Silenciar">🔊</button>
+      <button class="icon-btn fs-btn hidden" data-act="fullscreen" title="Pantalla completa">⛶</button>
       <button id="btn-code" class="code-chip" title="Copiar enlace de invitación"></button>
     </header>
     <div id="emote-bar" class="emote-bar hidden" role="group" aria-label="Emoticonos"></div>
 
     <section id="lobby" class="lobby hidden"></section>
+
+    <section id="ctl" class="ctl hidden">
+      <div id="ctl-me" class="ctl-me"></div>
+      <div id="ctl-others" class="ctl-others"></div>
+      <div id="ctl-status" class="ctl-status"></div>
+      <div id="ctl-actions" class="actions"></div>
+      <div id="ctl-hand" class="hand ctl-hand"></div>
+    </section>
 
     <section id="table-wrap" class="hidden">
       <div id="ring" class="ring">
@@ -83,6 +103,7 @@
         <div id="tv-round" class="tv-round"></div>
         <div id="tv-code" class="code-chip"></div>
         <button class="icon-btn mute-btn" data-act="mute"></button>
+        <button class="icon-btn fs-btn hidden" data-act="fullscreen" title="Pantalla completa">⛶</button>
       </header>
       <div id="tv-seats" class="tv-seats"></div>
       <div id="tv-table" class="table tv-table"></div>

@@ -394,3 +394,53 @@ html.tv body { overflow: hidden; }
   .hand .card + .card { margin-left: -12px; }
   .big-code { font-size: 2.3rem; }
 }
+
+/* ---------- Pantalla completa ---------- */
+#home { position: relative; }
+.fs-float { position: absolute; top: 10px; right: 12px; font-size: 1.4rem; }
+
+/* ---------- Móvil como mando (partida con tele) ---------- */
+body.ctl .topbar { padding: 6px 12px; }
+.ctl { --ch: min(44vh, 200px, 44vw); max-width: 980px; margin: 0 auto; padding: 8px 12px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ctl-me { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; background: rgba(0,0,0,.25); border-radius: 999px; padding: 4px 14px 4px 4px; }
+.ctl-me .lives { font-size: 1.05rem; }
+.ctl-name { max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-score { color: var(--muted); font-size: .92rem; }
+.ctl-score b { color: var(--ink); font-size: 1.05rem; }
+.ctl-score .ok { color: #8be0a4; }
+.ctl-others { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.ctl-others:empty { display: none; }
+.ctl-other { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; font-size: .78rem; font-weight: 700; }
+.ctl-other > .card + .card { margin-top: -50px; }
+.ctl-status { text-align: center; font-size: 1.15rem; font-weight: 700; min-height: 1.4em; }
+.ctl-status.mine { color: var(--gold); }
+.ctl .bid-btn { min-width: 56px; min-height: 48px; font-size: 1.35rem; }
+.ctl-hand { gap: 10px; flex-wrap: nowrap; padding: 10px 8px 6px; }
+.ctl-hand .card { width: calc(var(--ch) / 1.5); height: var(--ch); border-radius: calc(var(--ch) * .065); }
+.ctl-hand .card + .card { margin-left: 0; }
+.ctl-hand button.card.playable:hover, .ctl-hand button.card.playable:focus-visible { transform: translateY(-10px); }
+.ctl-modal { display: flex; flex-direction: column; gap: 12px; }
+.ctl-result { text-align: center; font-size: 1.1rem; margin: 0; line-height: 1.7; }
+.ctl-result .lost { color: var(--red); font-weight: 700; }
+.ctl-result .zero { color: #8be0a4; font-weight: 700; }
+.ctl-result .lives { font-size: 1.3rem; }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.ctl .brand { display: none; }
+  body.ctl .modal-body { max-height: 96vh; padding: 14px; gap: 10px; }
+  .ctl { gap: 4px; padding-top: 4px; }
+}
+@media (orientation: portrait) {
+  .ctl { --ch: min(30vh, 170px, 38vw); }
+  .ctl-hand { flex-wrap: wrap; }
+}
+
+/* Aviso de girar el móvil (solo en el mando, en vertical) */
+.rotate { position: fixed; inset: 0; z-index: 30; background: rgba(8,40,25,.97); align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.rotate-box { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 340px; }
+.rotate-box h2 { margin: 0; font-family: Georgia, serif; color: var(--gold); font-size: 1.8rem; }
+.rotate-box p { margin: 0; color: var(--muted); }
+.rotate-icon { font-size: 4rem; animation: turnPhone 1.8s ease-in-out infinite; }
+@keyframes turnPhone { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) {
+  body.ctl:not(.portrait-ok) #rotate.hidden { display: flex !important; }
+}

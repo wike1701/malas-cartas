@@ -80,6 +80,39 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.add('hidden'), ms || 3200);
   }
+  // ---------- Pantalla completa ----------
+  const FS_OK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  const isFs = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  function renderFs() {
+    const fs = isFs();
+    // En el fondo de la página principal solo hace falta el botón flotante; en partida, el de la barra.
+    document.querySelectorAll('.fs-btn').forEach(b => {
+      b.classList.toggle('hidden', !FS_OK);
+      b.textContent = fs ? '🗗' : '⛶';
+      b.title = fs ? 'Salir de pantalla completa' : 'Pantalla completa';
+      b.setAttribute('aria-pressed', String(fs));
+    });
+    document.querySelectorAll('.fs-only').forEach(b => b.classList.toggle('hidden', !FS_OK));
+  }
+  // landscape: además intenta girar la pantalla a horizontal (Android; iPhone no lo permite).
+  async function setFullscreen(on, landscape) {
+    try {
+      if (!on) {
+        if (isFs()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        return;
+      }
+      if (!isFs()) {
+        const el = document.documentElement;
+        await (el.requestFullscreen || el.webkitRequestFullscreen).call(el, { navigationUI: 'hide' });
+      }
+      if (landscape && screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+    } catch (e) {
+      if (!isFs()) toast('Este navegador no deja poner la pantalla completa');
+    }
+  }
+  document.addEventListener('fullscreenchange', renderFs);
+  document.addEventListener('webkitfullscreenchange', renderFs);
+
   function showScreen(id) {
     $('#home').classList.toggle('hidden', id !== 'home');
     $('#game').classList.toggle('hidden', id !== 'game');
@@ -311,7 +344,7 @@
       else if (e.type === 'lives') { fx.lives[e.pi] = e.n; if (e.mine || TV) S('lifeLost', 0.2); }
       else if (e.type === 'out') { fx.out[e.pi] = true; S('eliminated', 0.5); }
       else if (e.type === 'over') { fx.over = true; S(e.win || TV ? 'victory' : 'defeat', 0.9); }
-      else if (e.type === 'turn') S('turn', turnDelay);
+      else if (e.type === 'turn') { fx.turn = true; S('turn', turnDelay); }
     }
     render();
     if (fx.trick >= 0 && !isFast()) later.set(sweepTrick, 1500);
@@ -420,6 +453,12 @@
     if (!view) return;
     if (TV) { renderTV(); return; }
     const v = view;
+    // Móvil en una partida con tele: hace de mando (solo tu mano y tus apuestas).
+    const ctl = !!v.tv && role === 'guest' && v.phase !== 'lobby';
+    document.body.classList.toggle('ctl', ctl);
+    $('#ctl').classList.toggle('hidden', !ctl);
+    $('#log-box').classList.toggle('hidden', ctl);
+    if (ctl) { renderCtl(v); return; }
     const me = v.players[v.me];
     const isHost = role === 'host';
     const canLead = isHost || v.leader; // en modo TV manda el primer jugador
@@ -570,6 +609,97 @@
     renderModal(v);
   }
 
+  // ---------- Móvil como mando (modo TV) ----------
+  function renderCtl(v) {
+    const me = v.players[v.me];
+    const fast = isFast();
+    showScreen('game');
+    document.body.classList.toggle('fast', fast);
+    $('#btn-code').textContent = code;
+    $('#btn-emote').classList.remove('hidden');
+    $('#lobby').classList.add('hidden');
+    $('#table-wrap').classList.add('hidden');
+    $('#round-info').textContent = 'Ronda ' + v.round + ' · ' + v.cards + (v.cards === 1 ? ' carta' : ' cartas') +
+      (v.phase === 'playing' || v.phase === 'trickEnd' ? ' · Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + '/' + v.cards : '');
+
+    const ok = me.bid !== null && me.bid === me.won;
+    $('#ctl-me').innerHTML = av(me.avatar, 'sm') + '<b class="ctl-name">' + esc(me.name) + '</b>' +
+      '<span class="lives" aria-label="' + me.lives + ' vidas">' + livesHTML(me.lives, fx.lives && fx.lives[v.me]) + '</span>' +
+      (me.alive ? '<span class="ctl-score">Dices <b class="' + (fx.bids && fx.bids[v.me] ? 'stamp' : '') + '">' + (me.bid === null ? '–' : me.bid) +
+        '</b> · Llevas <b class="' + (ok ? 'ok' : '') + (fx.trick === v.me ? ' pop' : '') + '">' + me.won + '</b></span>' : '<span class="badge dead">Eliminado</span>');
+
+    // La tele no enseña ninguna carta: en la ronda de 1 carta (o eliminado) las de los demás se ven aquí.
+    const others = v.players.map((p, i) => ({ p, i })).filter(o => o.i !== v.me && o.p.alive && o.p.hand && o.p.hand.length);
+    $('#ctl-others').innerHTML = others.length
+      ? '<span class="muted small">' + (me.alive ? 'Cartas de los demás:' : 'Cartas de todos:') + '</span>' +
+        others.map(o => '<span class="ctl-other">' + o.p.hand.map(c => cardHTML(c, { sm: true })).join('') +
+          '<span>' + esc(o.p.name) + '</span></span>').join('')
+      : '';
+
+    const myTurn = v.turn === v.me;
+    const turnName = v.turn >= 0 ? esc(v.players[v.turn].name) : '';
+    const winner = v.lastTrick ? v.lastTrick.winner : -1;
+    let status;
+    if (!me.alive) status = 'Estás eliminado. Sigue la partida en la tele 📺';
+    else if (v.phase === 'bidding') status = myTurn ? (v.blind ? '¿Cuántas vas a ganar? (tu carta no la ves)' : '¿Cuántas mini rondas vas a ganar?')
+      : 'Turno de ' + turnName + ' · mira la tele 📺';
+    else if (v.phase === 'playing') status = myTurn ? 'Te toca: tira una carta' : 'Turno de ' + turnName + ' · mira la tele 📺';
+    else if (v.phase === 'trickEnd') status = winner === v.me ? '¡Ganas la mini ronda!' : esc(v.players[winner].name) + ' gana la mini ronda';
+    else status = 'Mira la tele 📺';
+    $('#ctl-status').innerHTML = status;
+    $('#ctl-status').classList.toggle('mine', myTurn);
+
+    let actions = '';
+    if (v.phase === 'bidding' && me.alive && myTurn) {
+      for (let n = 0; n <= v.cards; n++) {
+        const forb = n === v.forbidden;
+        actions += '<button class="btn bid-btn' + (forb ? ' forbidden' : '') + '" data-bid="' + n + '"' +
+          (forb ? ' disabled title="Prohibido"' : '') + '>' + n + '</button>';
+      }
+      if (v.forbidden !== null) actions += '<p class="note">No puedes decir ' + v.forbidden + ': la suma daría ' + v.cards + '.</p>';
+    }
+    $('#ctl-actions').innerHTML = actions;
+
+    const canPlay = v.phase === 'playing' && myTurn;
+    let hand = '';
+    if (me.alive) {
+      if (me.hand) hand = me.hand.slice().sort((a, b) => MC.rank(a) - MC.rank(b))
+        .map(c => cardHTML(c, { button: true, key: c.id, playable: canPlay })).join('');
+      else for (let i = 0; i < me.handCount; i++) hand += cardHTML(null, { button: true, key: '#' + i, playable: canPlay });
+    }
+    $('#ctl-hand').innerHTML = hand;
+    $('#ctl-hand').classList.toggle('waiting', !canPlay);
+    $('#ctl-hand').classList.toggle('my-turn', canPlay);
+    if (fx.deal && !fast) Array.from($('#ctl-hand').children).forEach((el, i) => { el.classList.add('deal'); el.style.setProperty('--i', i); });
+    if (canPlay && navigator.vibrate && fx.turn) { try { navigator.vibrate(120); } catch (e) { /* nada */ } }
+    renderModal(v);
+  }
+
+  // Resumen corto en el móvil-mando: el detalle se ve en la tele.
+  function ctlModal(v) {
+    const me = v.players[v.me];
+    const lead = v.leader;
+    let html = '';
+    if (v.phase === 'gameOver') {
+      const iWin = v.winners.indexOf(v.me) >= 0;
+      html += (fx.over && iWin && !isFast() ? confetti() : '') +
+        '<h2>' + (iWin ? '¡Has ganado! 🏆' : 'Gana ' + v.winners.map(i => esc(v.players[i].name)).join(' y ')) + '</h2>' +
+        '<div class="row">' + (lead ? '<button class="btn primary" data-act="again">Otra partida</button>' : '') +
+        '<button class="btn" data-act="leave">Salir</button></div>' +
+        (lead ? '' : '<p class="muted small" style="text-align:center">El primero de la sala o el mando de la tele pueden empezar otra partida.</p>');
+    } else {
+      const s = (v.summary || []).find(x => x.pi === v.me);
+      html += '<h2>Fin de la ronda ' + v.round + '</h2>' +
+        (s ? '<p class="ctl-result">Dijiste <b>' + s.bid + '</b> y ganaste <b>' + s.won + '</b>: ' +
+          (s.lost ? '<span class="lost">pierdes ' + s.lost + (s.lost === 1 ? ' vida' : ' vidas') + '</span>' : '<span class="zero">¡clavado!</span>') +
+          '<br><span class="lives">' + livesHTML(me.lives) + '</span>' + (me.lives ? '' : ' Eliminado') + '</p>'
+          : '<p class="ctl-result">Mira el resumen en la tele 📺</p>') +
+        (lead && !isFast() ? '<div class="row"><button class="btn primary" data-act="next">Siguiente ronda</button></div>' : '') +
+        '<p class="muted small" style="text-align:center">La siguiente ronda empieza sola en unos segundos.</p>';
+    }
+    return '<div class="ctl-modal">' + html + '</div>';
+  }
+
   function renderLog(v) {
     $('#log').innerHTML = v.log.slice().reverse().map(l => '<li>' + esc(l) + '</li>').join('');
   }
@@ -578,7 +708,10 @@
     const isHost = role === 'host' || v.leader;
     const tvGuest = v.tv && role !== 'host';
     const fast = isFast();
-    if (v.phase === 'roundEnd' || v.phase === 'gameOver') {
+    if ((v.phase === 'roundEnd' || v.phase === 'gameOver') && tvGuest) {
+      profileOpen = -1;
+      modal(ctlModal(v));
+    } else if (v.phase === 'roundEnd' || v.phase === 'gameOver') {
       profileOpen = -1;
       let html = '';
       if (v.phase === 'gameOver') {
@@ -957,6 +1090,7 @@
     hostConn = peer.connect(PREFIX + code, { reliable: true });
     hostConn.on('open', () => {
       hostConn.send({ t: 'join', cid: myCid, name: myName, avatar: myAvatar });
+      $('#toast').classList.add('hidden');
       history.replaceState(null, '', location.pathname + '?' + DEV_Q + 'sala=' + code);
       modal(null);
       hostSeen = Date.now();
@@ -995,6 +1129,9 @@
     try { if (peer) peer.destroy(); } catch (e) { /* nada */ }
     peer = null; hostConn = null; game = null; view = null; role = null; conns.clear();
     modal(null);
+    document.body.classList.remove('ctl');
+    $('#ctl').classList.add('hidden');
+    $('#log-box').classList.remove('hidden');
     history.replaceState(null, '', location.pathname + (DEV ? '?dev' : ''));
     profileOpen = -1;
     toggleEmoteBar(false);
@@ -1035,6 +1172,9 @@
       else if (a === 'close-profile') { profileOpen = -1; if (view) renderModal(view); else modal(null); }
       else if (a === 'leave') resetToHome();
       else if (a === 'tv-retry') { tvLoading(); createRoom(); }
+      else if (a === 'fullscreen') setFullscreen(!isFs());
+      else if (a === 'landscape') setFullscreen(true, true);
+      else if (a === 'portrait-ok') document.body.classList.add('portrait-ok');
       else if (a === 'reconnect') {
         modal(null);
         if (peer && !peer.destroyed && !peer.disconnected) connectToHost();
@@ -1089,6 +1229,7 @@
   $('#name').value = store('mc-name') || '';
   renderHomeAvatar();
   renderMute();
+  renderFs();
   renderEmoteBar();
   if (TV) {
     document.documentElement.classList.add('tv');

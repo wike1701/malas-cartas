@@ -17,7 +17,7 @@ La tele muestra la mesa y cada jugador juega desde su móvil con sus cartas.
 1. Abre la app **Malas Cartas** en la tele. Aparece un código QR y el código de la sala.
 2. Cada jugador escanea el QR con el móvil, escribe su nombre y pulsa **Unirse** (2 a 6 jugadores).
 3. Empieza la partida con el mando de la tele (botón central) o desde el móvil del primero que se unió (👑).
-4. En la tele se ven los asientos, las vidas, lo que dice cada uno y las cartas que se tiran. En el móvil, tu mano y los botones para apostar.
+4. En la tele se ven los asientos, las vidas, lo que dice cada uno y las cartas que se tiran. El móvil hace de mando, en horizontal: solo muestra tu mano, tus vidas y los botones para decir cuántas mini rondas ganas. Si está en vertical, pide girarlo, y en Android un botón lo pone en pantalla completa y horizontal.
 5. Al acabar cada ronda se muestra el resumen y la siguiente empieza sola a los 15 segundos (o antes, con el botón).
 
 En la ronda de 1 carta, la tele no enseña ninguna carta. Cada uno ve en su móvil las de los demás.
@@ -43,6 +43,9 @@ base64 -w0 tv.jks
 ```
 
 Sin esos secretos el APK se firma con una clave temporal, y para actualizarlo hay que desinstalar antes la versión anterior.
+
+## Pantalla completa
+En el móvil y en el ordenador, el botón ⛶ (arriba a la derecha) pone el juego en pantalla completa. En iPhone el navegador no lo permite y el botón no aparece.
 
 ## Avatares, sonido y animaciones
 - Elige uno de los 16 personajes o sube tu propia foto (se recorta y comprime en el navegador). Se puede cambiar también en la sala de espera.
