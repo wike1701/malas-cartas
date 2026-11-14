@@ -4,8 +4,16 @@
 
   const PREFIX = 'malascartas-v1-';
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const TRICK_PAUSE = 2200;
-  const BOT_DELAY = 2500;
+  // Pausas en ms: [normal, partida rápida].
+  const TRICK_PAUSE = [2200, 600];
+  const BOT_DELAY = [2500, 1200];   // jugada automática de un desconectado
+  const BOT_THINK = [1000, 250];    // lo que "piensa" un bot
+  const ROUND_AUTO = 2000;          // en partida rápida la ronda pasa sola
+  const EMOTES = ['😂', '😡', '😱', '👍', '👎', '🔥', '😭', '🤡', '🙏', '😎'];
+  const EMOTE_GAP = 1200;
+  // Modo dev: solo si se abre la página con ?dev. Permite añadir bots en la sala.
+  const DEV = new URLSearchParams(location.search).has('dev');
+  const DEV_Q = DEV ? 'dev&' : '';
 
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -33,6 +41,7 @@
   // Anfitrión
   let game = null;
   const conns = new Map(); // cid -> conexión
+  const emoteSeen = new Map(); // cid -> último emoticono (para no saturar)
   let timer = null;
   // Invitado
   let hostConn = null;
@@ -70,13 +79,16 @@
     $('#home').classList.toggle('hidden', id !== 'home');
     $('#game').classList.toggle('hidden', id !== 'game');
   }
+  let modalHtml = null;
   function modal(html) {
-    if (!html) { $('#modal').classList.add('hidden'); return; }
-    $('#modal-body').innerHTML = html;
+    if (!html) { modalHtml = null; $('#modal').classList.add('hidden'); return; }
+    // Mismo contenido: no se repinta (evita parpadeos con cada vista nueva).
+    if (html !== modalHtml || $('#modal').classList.contains('hidden')) $('#modal-body').innerHTML = html;
+    modalHtml = html;
     $('#modal').classList.remove('hidden');
   }
   function inviteLink() {
-    return location.origin + location.pathname + '?sala=' + code;
+    return location.origin + location.pathname + '?sala=' + code; // la invitación nunca lleva ?dev
   }
 
   // Símbolos de los palos dibujados en una caja de 40×40.
@@ -284,8 +296,60 @@
       else if (e.type === 'turn') S('turn', turnDelay);
     }
     render();
-    if (fx.trick >= 0) later.set(sweepTrick, 1500);
+    if (fx.trick >= 0 && !isFast()) later.set(sweepTrick, 1500);
     fx = {}; // otros repintados (p. ej. abrir el selector) no repiten las animaciones
+  }
+
+  const isFast = () => !!(view && view.settings && view.settings.fast);
+
+  // ---------- Mesa redonda ----------
+  // Ángulo del asiento i: yo siempre abajo (90°) y los demás en orden alrededor de la mesa.
+  function seatAngle(i, v) {
+    const n = v.players.length;
+    const me = v.me >= 0 ? v.me : 0;
+    return 90 + (((i - me) % n) + n) % n * (360 / n);
+  }
+
+  // ---------- Emoticonos ----------
+  function renderEmoteBar() {
+    $('#emote-bar').innerHTML = EMOTES.map(e => '<button class="emote-pick" data-emote="' + e + '" title="Enviar ' + e + '">' + e + '</button>').join('');
+  }
+  function toggleEmoteBar(open) {
+    const bar = $('#emote-bar');
+    const show = open === undefined ? bar.classList.contains('hidden') : open;
+    bar.classList.toggle('hidden', !show);
+    $('#btn-emote').setAttribute('aria-expanded', String(show));
+  }
+  // Burbuja sobre el asiento de quien lo manda. Vive fuera de #seats para que el repintado no la borre.
+  function showEmote(pi, e) {
+    if (!view || view.phase === 'lobby' || !view.players[pi] || EMOTES.indexOf(e) < 0) return;
+    const ring = $('#ring');
+    ring.querySelectorAll('.emote-bubble[data-pi="' + pi + '"]').forEach(el => el.remove());
+    const b = document.createElement('div');
+    b.className = 'emote-bubble';
+    b.dataset.pi = pi;
+    b.style.setProperty('--a', seatAngle(pi, view) + 'deg');
+    b.textContent = e;
+    b.setAttribute('aria-label', view.players[pi].name + ': ' + e);
+    ring.appendChild(b);
+    MCSND.play('emote');
+    setTimeout(() => b.remove(), 2600);
+  }
+
+  // ---------- Perfil ampliado ----------
+  let profileOpen = -1;
+  function profileHTML(v, i) {
+    const p = v.players[i];
+    const tags = [];
+    if (i === 0) tags.push('Anfitrión');
+    if (p.bot) tags.push('🤖 Bot');
+    if (v.phase !== 'lobby' && !p.alive) tags.push('Eliminado');
+    if (!p.connected) tags.push('Desconectado');
+    return '<div class="profile">' + av(p.avatar, 'profile-av') +
+      '<h2>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</h2>' +
+      (v.phase !== 'lobby' ? '<div class="lives big-lives" aria-label="' + p.lives + ' vidas">' + livesHTML(p.lives) + '</div>' : '') +
+      (tags.length ? '<p class="muted">' + tags.join(' · ') + '</p>' : '') +
+      '<div class="row"><button class="btn" data-act="close-profile">Cerrar</button></div></div>';
   }
 
   // Las cartas de la mesa se deslizan hacia el asiento de quien ganó la mini ronda.
@@ -323,28 +387,39 @@
     const isHost = role === 'host';
     $('#btn-code').textContent = code;
     showScreen('game');
+    const fast = isFast();
+    document.body.classList.toggle('fast', fast);
+    $('#btn-emote').classList.toggle('hidden', v.phase === 'lobby');
+    if (v.phase === 'lobby') toggleEmoteBar(false);
 
     if (v.phase === 'lobby') {
       $('#lobby').classList.remove('hidden');
       $('#table-wrap').classList.add('hidden');
       $('#round-info').textContent = 'Sala de espera';
       const n = v.players.length;
+      const full = n >= MC.MAX_PLAYERS;
       $('#lobby').innerHTML =
         '<p class="muted">Código de la sala</p><p class="big-code">' + esc(code) + '</p>' +
         '<div class="row"><button class="btn" data-act="copy">Copiar enlace de invitación</button></div>' +
         '<p class="muted small">Pásales el código o el enlace a tus amigos. Máximo ' + MC.MAX_PLAYERS + ' jugadores.</p>' +
         '<ul class="lobby-list">' + v.players.map((p, i) =>
-          '<li><span class="who">' + av(p.avatar, 'sm') + '<span>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</span></span>' +
+          '<li><span class="who"><button class="av-btn" data-profile="' + i + '" title="Ver perfil de ' + esc(p.name) + '">' + av(p.avatar, 'sm') + '</button>' +
+          '<span>' + esc(p.name) + (i === v.me ? ' (tú)' : '') + '</span>' + (p.bot ? '<span class="badge bot">Bot</span>' : '') + '</span>' +
           (i === v.me ? '<button class="btn small-btn" data-act="toggle-av" aria-expanded="' + avatarOpen + '">Cambiar avatar</button>' : '') +
+          (p.bot && isHost && DEV ? '<button class="btn small-btn" data-rmbot="' + i + '" title="Quitar bot">✕</button>' : '') +
           '<span class="muted small">' + (i === 0 ? 'Anfitrión' : '') + '</span></li>').join('') + '</ul>' +
         (avatarOpen ? avatarPicker() : '') +
+        (isHost && DEV ? '<div class="dev-box"><span class="badge bot">DEV</span>' +
+          '<button class="btn small-btn" data-act="addBot"' + (full ? ' disabled' : '') + '>🤖 Añadir bot</button></div>' : '') +
+        '<label class="opt' + (isHost ? '' : ' readonly') + '"><input type="checkbox" data-set="fast"' + (fast ? ' checked' : '') +
+          (isHost ? '' : ' disabled') + '> <span>⚡ <b>Partida rápida</b><span class="muted small"> · sin animaciones, pausas mínimas y las rondas pasan solas</span></span></label>' +
         (isHost
           ? '<button class="btn primary big" data-act="start"' + (n < MC.MIN_PLAYERS ? ' disabled' : '') + '>' +
             (n < MC.MIN_PLAYERS ? 'Esperando jugadores…' : 'Empezar partida (' + n + ' jugadores)') + '</button>' +
             '<p class="muted small">No cierres esta pestaña: la partida vive en tu navegador.</p>'
           : '<p class="muted">Esperando a que el anfitrión empiece la partida…</p>');
       renderLog(v);
-      modal(null);
+      renderModal(v);
       return;
     }
 
@@ -362,13 +437,18 @@
       if (fx.lives && fx.lives[i]) cls.push('shake');
       if (fx.trick === i) cls.push('won-trick');
       const badges = (i === v.dealer && p.alive ? '<span class="badge">Reparte</span>' : '') +
+        (p.bot ? '<span class="badge bot">Bot</span>' : '') +
         (!p.connected ? '<span class="badge off">Desconectado</span>' : '') +
         (!p.alive ? '<span class="badge dead' + (fx.out && fx.out[i] ? ' stamp' : '') + '">Eliminado</span>' : '');
       const bidTxt = p.bid === null ? '–' : p.bid;
       const ok = p.bid !== null && p.bid === p.won;
-      const mini = v.blind && i !== v.me && p.hand && p.hand.length
-        ? '<div class="mini-hand">' + p.hand.map(c => cardHTML(c, { sm: true })).join('') + '</div>' : '';
-      return '<div class="' + cls.join(' ') + '"><div class="seat-head">' + av(p.avatar, 'seat-av') +
+      // Ronda de 1 carta: ves las de los demás. Espectador (eliminado): ves todas.
+      const showMini = p.alive && p.hand && p.hand.length && (v.spectator || (v.blind && i !== v.me));
+      const mini = showMini
+        ? '<div class="mini-hand' + (p.hand.length > 1 ? ' fan' : '') + '">' +
+          p.hand.slice().sort((a, b) => MC.rank(a) - MC.rank(b)).map(c => cardHTML(c, { sm: true })).join('') + '</div>' : '';
+      return '<div class="' + cls.join(' ') + '" style="--a:' + seatAngle(i, v) + 'deg"><div class="seat-head">' +
+        '<button class="av-btn" data-profile="' + i + '" title="Ver perfil de ' + esc(p.name) + '">' + av(p.avatar, 'seat-av') + '</button>' +
         '<div class="seat-info"><div class="seat-top"><span class="name">' + esc(p.name) +
         (i === v.me ? ' (tú)' : '') + '</span>' + badges + '</div>' +
         '<div class="lives" aria-label="' + p.lives + ' vidas">' + livesHTML(p.lives, fx.lives && fx.lives[i]) + '</div></div></div>' +
@@ -377,21 +457,33 @@
         mini + '</div>';
     }).join('');
 
-    // Mesa
+    // Mesa: contador global de lo dicho + cartas jugadas
     const winner = v.lastTrick ? v.lastTrick.winner : -1;
     const shown = $('#table').querySelectorAll('.play').length;
-    $('#table').innerHTML = v.trick.length
+    let counter = '';
+    if (v.phase === 'bidding' || v.phase === 'playing' || v.phase === 'trickEnd') {
+      const sum = v.bidSum !== undefined ? v.bidSum : v.players.reduce((s, p) => s + (p.alive && p.bid !== null ? p.bid : 0), 0);
+      const diff = sum - v.cards;
+      const allBid = v.players.every(p => !p.alive || p.bid !== null);
+      const hint = !allBid ? 'van diciendo' : diff > 0 ? 'sobran ' + diff : 'faltan ' + (-diff);
+      counter = '<div class="counter ' + (!allBid ? 'pending' : diff > 0 ? 'over' : 'under') + '" title="Suma de lo que ha dicho cada jugador">' +
+        'Dicho <b>' + sum + '</b> / ' + v.cards + ' <span>· ' + hint + '</span></div>';
+    }
+    $('#table').innerHTML = counter + '<div class="plays">' + (v.trick.length
       ? v.trick.map((t, i) => '<div class="play' + (i >= shown ? ' new' : '') + (t.pi === winner ? ' win' : '') + '">' + cardHTML(t.card) +
           '<span class="who">' + av(v.players[t.pi].avatar, 'xs') + '<span>' + esc(v.players[t.pi].name) + '</span></span></div>').join('')
       : '<div class="table-empty">' + (v.phase === 'bidding'
           ? (v.blind ? 'Ronda de 1 carta: ves las de los demás, pero no la tuya' : 'Fase de apuestas')
-          : 'Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + ' de ' + v.cards) + '</div>';
+          : 'Mini ronda ' + Math.min(v.trickNum + 1, v.cards) + ' de ' + v.cards) + '</div>') + '</div>';
 
     // Estado
     const myTurn = v.turn === v.me;
     const turnName = v.turn >= 0 ? v.players[v.turn].name : '';
     let status = '';
-    if (!me.alive && v.phase !== 'gameOver') status = 'Estás eliminado. Puedes seguir mirando la partida.';
+    if (!me.alive && v.phase !== 'gameOver') {
+      status = '👀 Modo espectador: ves las cartas de todos. ' + (v.phase === 'bidding' ? 'Dice ' + turnName + '…'
+        : v.phase === 'playing' ? 'Tira ' + turnName + '…' : v.phase === 'trickEnd' ? v.players[winner].name + ' gana la mini ronda' : '');
+    }
     else if (v.phase === 'bidding') status = myTurn ? '¿Cuántas mini rondas vas a ganar?' : 'Esperando a que ' + turnName + ' diga cuántas gana…';
     else if (v.phase === 'playing') status = myTurn ? 'Te toca: tira una carta' : 'Turno de ' + turnName;
     else if (v.phase === 'trickEnd') status = v.players[winner].name + ' gana la mini ronda';
@@ -402,7 +494,6 @@
     // Acciones (apuestas)
     let actions = '';
     if (v.phase === 'bidding' && me.alive) {
-      const sum = v.players.reduce((s, p) => s + (p.bid || 0), 0);
       if (myTurn) {
         for (let n = 0; n <= v.cards; n++) {
           const forb = n === v.forbidden;
@@ -412,7 +503,6 @@
         if (v.forbidden !== null) actions += '<p class="note">No puedes decir ' + v.forbidden +
           ': la suma de todos daría ' + v.cards + ', igual que las mini rondas.</p>';
       }
-      actions += '<p class="note">Llevan dicho ' + sum + ' de ' + v.cards + ' mini rondas.</p>';
     }
     $('#actions').innerHTML = actions;
 
@@ -430,7 +520,7 @@
     $('#hand').innerHTML = hand;
     $('#hand').classList.toggle('waiting', !canPlay);
     $('#hand').classList.toggle('my-turn', canPlay);
-    if (fx.deal) Array.from($('#hand').children).forEach((el, i) => { el.classList.add('deal'); el.style.setProperty('--i', i); });
+    if (fx.deal && !fast) Array.from($('#hand').children).forEach((el, i) => { el.classList.add('deal'); el.style.setProperty('--i', i); });
 
     renderLog(v);
     renderModal(v);
@@ -442,12 +532,14 @@
 
   function renderModal(v) {
     const isHost = role === 'host';
+    const fast = isFast();
     if (v.phase === 'roundEnd' || v.phase === 'gameOver') {
+      profileOpen = -1;
       let html = '';
       if (v.phase === 'gameOver') {
         const names = v.winners.map(i => esc(v.players[i].name)).join(' y ');
         const iWin = v.winners.indexOf(v.me) >= 0;
-        html += (fx.over && iWin ? confetti() : '') +
+        html += (fx.over && iWin && !fast ? confetti() : '') +
           '<div class="medals">' + v.winners.map(i => '<span class="medal">' + av(v.players[i].avatar, 'medal-av') + '</span>').join('') + '</div>' +
           '<h2>' + (iWin ? '¡Has ganado!' : 'Gana ' + names) + '</h2>';
       } else {
@@ -459,7 +551,9 @@
             '</td><td class="' + (s.lost ? 'lost' : 'zero') + '">' + (s.lost ? '−' + s.lost : '0') + '</td><td>' +
             (s.lives ? s.lives : 'Eliminado') + '</td></tr>').join('') + '</table>';
       }
-      if (v.phase === 'roundEnd') {
+      if (v.phase === 'roundEnd' && fast) {
+        html += '<p class="muted" style="text-align:center">⚡ La siguiente ronda empieza sola…</p>';
+      } else if (v.phase === 'roundEnd') {
         html += isHost ? '<div class="row"><button class="btn primary big" data-act="next">Siguiente ronda</button></div>'
           : '<p class="muted" style="text-align:center">Esperando a que el anfitrión pase de ronda…</p>';
       } else {
@@ -468,7 +562,10 @@
           (isHost ? '' : '<p class="muted small" style="text-align:center">El anfitrión puede empezar otra partida.</p>');
       }
       modal(html);
+    } else if (profileOpen >= 0 && v.players[profileOpen]) {
+      modal(profileHTML(v, profileOpen));
     } else {
+      profileOpen = -1;
       modal(null);
     }
   }
@@ -538,6 +635,18 @@
 
     const pi = idxOf(cid);
     if (pi < 0) return;
+
+    // Emoticonos: no cambian la partida; el anfitrión los valida y los reparte a todos.
+    if (msg.t === 'emote') {
+      if (EMOTES.indexOf(msg.e) < 0 || game.phase === 'lobby') return;
+      const now = Date.now();
+      if (now - (emoteSeen.get(cid) || 0) < EMOTE_GAP) return;
+      emoteSeen.set(cid, now);
+      for (const c of conns.values()) sendTo(c, { t: 'emote', pi, e: msg.e });
+      showEmote(pi, msg.e);
+      return;
+    }
+
     try {
       switch (msg.t) {
         case 'bid': MC.placeBid(game, pi, Number(msg.n)); break;
@@ -554,6 +663,13 @@
         case 'start': if (fromHost) MC.startGame(game); break;
         case 'next': if (fromHost && game.phase === 'roundEnd') MC.advance(game); break;
         case 'again': if (fromHost && game.phase === 'gameOver') MC.backToLobby(game); break;
+        case 'settings': if (fromHost) MC.setSettings(game, { fast: !!msg.fast }); break;
+        case 'addBot': if (fromHost && DEV) MC.addBot(game); break;
+        case 'removeBot': {
+          const bi = Number(msg.i);
+          if (fromHost && DEV && game.players[bi] && game.players[bi].bot) MC.removePlayer(game, bi);
+          break;
+        }
         default: return;
       }
     } catch (e) {
@@ -576,7 +692,7 @@
 
   function sync() {
     game.players.forEach((p, i) => {
-      if (p.cid !== myCid) sendTo(conns.get(p.cid), { t: 'state', view: MC.viewFor(game, i), code });
+      if (p.cid !== myCid && !p.bot) sendTo(conns.get(p.cid), { t: 'state', view: MC.viewFor(game, i), code });
     });
     const mi = idxOf(myCid);
     if (mi >= 0) applyView(MC.viewFor(game, mi));
@@ -592,10 +708,21 @@
     if (key === timerKey) return;
     later.clear(timer);
     timerKey = key;
+    const f = game.settings && game.settings.fast ? 1 : 0;
+    const step = fn => () => {
+      timerKey = null;
+      if (!game) return;
+      try { fn(); } catch (e) { if (!e.game) throw e; }
+      sync();
+    };
     if (game.phase === 'trickEnd') {
-      timer = later.set(() => { timerKey = null; MC.advance(game); sync(); }, TRICK_PAUSE);
+      timer = later.set(step(() => MC.advance(game)), TRICK_PAUSE[f]);
+    } else if (game.phase === 'roundEnd' && f) {
+      timer = later.set(step(() => { if (game.phase === 'roundEnd') MC.advance(game); }), ROUND_AUTO);
+    } else if ((game.phase === 'bidding' || game.phase === 'playing') && game.turn >= 0 && tp.bot) {
+      timer = later.set(step(() => MC.botAction(game, game.turn)), BOT_THINK[f]);
     } else if ((game.phase === 'bidding' || game.phase === 'playing') && game.turn >= 0 && !tp.connected) {
-      timer = later.set(() => { timerKey = null; MC.autoAction(game, game.turn); sync(); }, BOT_DELAY);
+      timer = later.set(step(() => MC.autoAction(game, game.turn)), BOT_DELAY[f]);
     }
   }
 
@@ -649,7 +776,7 @@
     hostConn = peer.connect(PREFIX + code, { reliable: true });
     hostConn.on('open', () => {
       hostConn.send({ t: 'join', cid: myCid, name: myName, avatar: myAvatar });
-      history.replaceState(null, '', location.pathname + '?sala=' + code);
+      history.replaceState(null, '', location.pathname + '?' + DEV_Q + 'sala=' + code);
       modal(null);
       hostSeen = Date.now();
       guestWatch(++watchToken);
@@ -658,6 +785,7 @@
       hostSeen = Date.now();
       if (msg.t === 'ping') { hostConn.send({ t: 'pong' }); return; }
       if (msg.t === 'state') applyView(msg.view);
+      else if (msg.t === 'emote') showEmote(Number(msg.pi), msg.e);
       else if (msg.t === 'error') {
         toast(msg.msg, 4000);
         if (msg.fatal) { leaving = true; resetToHome(); }
@@ -686,7 +814,10 @@
     try { if (peer) peer.destroy(); } catch (e) { /* nada */ }
     peer = null; hostConn = null; game = null; view = null; role = null; conns.clear();
     modal(null);
-    history.replaceState(null, '', location.pathname);
+    history.replaceState(null, '', location.pathname + (DEV ? '?dev' : ''));
+    profileOpen = -1;
+    toggleEmoteBar(false);
+    document.body.classList.remove('fast');
     showScreen('home');
   }
 
@@ -710,12 +841,17 @@
     if (b.dataset.av !== undefined) setMyAvatar(b.dataset.av === 'photo' ? store('mc-photo') : b.dataset.av);
     else if (b.dataset.bid !== undefined) send({ t: 'bid', n: Number(b.dataset.bid) });
     else if (b.dataset.play !== undefined) send({ t: 'play', card: b.dataset.play });
+    else if (b.dataset.profile !== undefined) { profileOpen = Number(b.dataset.profile); if (view) renderModal(view); }
+    else if (b.dataset.emote !== undefined) { send({ t: 'emote', e: b.dataset.emote }); toggleEmoteBar(false); }
+    else if (b.dataset.rmbot !== undefined) send({ t: 'removeBot', i: Number(b.dataset.rmbot) });
     else if (b.dataset.act) {
       const a = b.dataset.act;
       if (a === 'copy') copyLink();
       else if (a === 'photo') choosePhoto();
       else if (a === 'toggle-av') { avatarOpen = !avatarOpen; render(); }
       else if (a === 'mute') { MCSND.toggleMute(); renderMute(); }
+      else if (a === 'emote-menu') toggleEmoteBar();
+      else if (a === 'close-profile') { profileOpen = -1; if (view) renderModal(view); else modal(null); }
       else if (a === 'leave') resetToHome();
       else if (a === 'reconnect') {
         modal(null);
@@ -726,6 +862,20 @@
   });
 
   $('#btn-code').addEventListener('click', copyLink);
+
+  // Opciones de la partida (casillas de la sala de espera).
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (el.dataset && el.dataset.set === 'fast') send({ t: 'settings', fast: el.checked });
+  });
+
+  // Clic fuera del perfil lo cierra; clic fuera de la barra de emoticonos la cierra.
+  $('#modal').addEventListener('click', e => {
+    if (e.target === $('#modal') && profileOpen >= 0) { profileOpen = -1; if (view) renderModal(view); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('#emote-bar, #btn-emote')) toggleEmoteBar(false);
+  });
 
   $('#btn-create').addEventListener('click', () => {
     const n = readName(); if (!n) return;
@@ -756,12 +906,13 @@
   $('#name').value = store('mc-name') || '';
   renderHomeAvatar();
   renderMute();
+  renderEmoteBar();
   const params = new URLSearchParams(location.search);
   const sala = (params.get('sala') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
   if (sala) {
     $('#code').value = sala;
     toast('Te han invitado a la sala ' + sala + '. Escribe tu nombre y pulsa Unirse.', 5000);
-    history.replaceState(null, '', location.pathname);
+    history.replaceState(null, '', location.pathname + (DEV ? '?dev' : ''));
   }
   ($('#name').value ? (sala ? $('#join-form button') : $('#btn-create')) : $('#name')).focus();
   if (typeof Peer === 'undefined') toast('No se pudo cargar la librería de conexión. Revisa tu internet y recarga.', 8000);
