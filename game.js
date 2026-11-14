@@ -61,8 +61,29 @@
     return {
       phase: 'lobby', players: [], round: 0, cards: MAX_CARDS, dir: -1,
       dealer: -1, turn: -1, trick: [], trickNum: 0, lastTrick: null,
-      log: [], summary: null, winners: null,
+      log: [], summary: null, winners: null, settings: { fast: false },
     };
+  }
+
+  // Opciones de la partida (solo en la sala de espera).
+  function setSettings(g, s) {
+    if (g.phase !== 'lobby') fail('Solo se puede cambiar en la sala de espera');
+    if (!g.settings) g.settings = { fast: false };
+    if (s && typeof s.fast === 'boolean') g.settings.fast = s.fast;
+  }
+
+  const BOT_NAMES = ['Bot Paco', 'Bot Lola', 'Bot Manolo', 'Bot Pepa', 'Bot Curro', 'Bot Rocío', 'Bot Fermín', 'Bot Lucía'];
+  function addBot(g) {
+    if (g.phase !== 'lobby') fail('La partida ya ha empezado');
+    if (g.players.length >= MAX_PLAYERS) fail('La sala está llena (máximo ' + MAX_PLAYERS + ')');
+    let k = 1;
+    while (g.players.some(p => p.cid === 'bot-' + k)) k++;
+    const used = new Set(g.players.map(p => p.name));
+    const name = BOT_NAMES.find(n => !used.has(n)) || ('Bot ' + k);
+    const cid = 'bot-' + k;
+    g.players.push({ cid, name, lives: START_LIVES, alive: true, hand: [], bid: null, won: 0, connected: true, bot: true, avatar: AV.defaultAvatar(cid + name) });
+    log(g, name + ' se ha unido');
+    return g.players.length - 1;
   }
 
   function log(g, text) {
@@ -229,7 +250,7 @@
   function backToLobby(g) {
     g.phase = 'lobby'; g.round = 0; g.summary = null; g.winners = null;
     g.trick = []; g.lastTrick = null; g.turn = -1;
-    g.players = g.players.filter(p => p.connected);
+    g.players = g.players.filter(p => p.connected || p.bot);
     for (const p of g.players) { p.lives = START_LIVES; p.alive = true; p.hand = []; p.bid = null; p.won = 0; }
   }
 
@@ -246,20 +267,60 @@
     }
   }
 
+  // Jugada de un bot: apuesta según sus cartas fuertes y juega para cumplir lo que dijo.
+  function botAction(g, pi) {
+    if (g.turn !== pi) return;
+    const me = g.players[pi];
+    if (g.phase === 'bidding') {
+      const f = forbiddenBid(g);
+      let n;
+      if (g.cards === 1) {
+        // Ronda ciega: ve las cartas de los demás, no la suya.
+        const others = aliveIdx(g).filter(i => i !== pi).map(i => g.players[i].hand[0]).filter(Boolean);
+        n = others.some(c => rank(c) >= 11) ? 0 : 1;
+      } else {
+        const rivals = aliveIdx(g).length - 1;
+        let s = 0;
+        for (const c of me.hand) {
+          if (c.n === 1) s += 1;
+          else if (c.n === 12) s += rivals <= 2 ? 0.7 : 0.45;
+          else if (c.n === 11) s += rivals <= 2 ? 0.45 : 0.25;
+        }
+        n = Math.max(0, Math.min(g.cards, Math.round(s)));
+      }
+      if (n === f) n = n + 1 <= g.cards ? n + 1 : n - 1;
+      placeBid(g, pi, n);
+    } else if (g.phase === 'playing') {
+      const hand = me.hand.slice().sort((a, b) => rank(a) - rank(b));
+      const best = g.trick.length ? Math.max(...g.trick.map(t => rank(t.card))) : -1;
+      const wins = hand.filter(c => rank(c) > best);
+      const loses = hand.filter(c => rank(c) <= best);
+      let card;
+      if (me.won < me.bid) card = wins.length ? wins[0] : hand[0];
+      else card = loses.length ? loses[loses.length - 1] : hand[0];
+      playCard(g, pi, card.id);
+    }
+  }
+
   // Lo que puede ver el jugador pi. En la ronda de 1 carta ves las de los demás, no la tuya.
+  // Los eliminados son espectadores y ven todas las cartas.
   function viewFor(g, pi) {
     const blind = g.cards === 1 && (g.phase === 'bidding' || g.phase === 'playing');
+    const meP = g.players[pi];
+    const spectator = !!meP && !meP.alive && g.phase !== 'lobby';
+    const bidSum = g.players.reduce((s, p) => s + (p.alive && p.bid !== null ? p.bid : 0), 0);
     return {
       me: pi,
       phase: g.phase, round: g.round, cards: g.cards, dealer: g.dealer, turn: g.turn,
-      trickNum: g.trickNum, blind,
+      trickNum: g.trickNum, blind, spectator, bidSum,
+      settings: Object.assign({ fast: false }, g.settings),
       trick: g.trick, lastTrick: g.lastTrick, summary: g.summary, winners: g.winners,
       forbidden: g.turn === pi ? forbiddenBid(g) : null,
       log: g.log.slice(-25),
       players: g.players.map((p, i) => ({
         name: p.name, avatar: p.avatar, lives: p.lives, alive: p.alive, bid: p.bid, won: p.won,
-        connected: p.connected, handCount: p.hand.length,
-        hand: i === pi ? (blind ? null : p.hand) : (blind ? p.hand : null),
+        connected: p.connected, bot: !!p.bot, handCount: p.hand.length,
+        hand: spectator ? p.hand : i === pi ? (blind ? null : p.hand) : (blind ? p.hand : null),
       })),
     };
   }
@@ -277,7 +338,7 @@
     SUITS, NUMS, MAX_PLAYERS, MIN_PLAYERS, START_LIVES, MAX_CARDS,
     makeDeck, shuffle, rank, trickWinner, nextCardCount, createGame, addPlayer, setAvatar, removePlayer,
     aliveIdx, nextAlive, startGame, startRound, forbiddenBid, placeBid, playCard, advance,
-    endRound, backToLobby, autoAction, viewFor, tableView,
+    endRound, backToLobby, autoAction, botAction, viewFor, tableView, setSettings, addBot,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MC = api;

@@ -112,6 +112,10 @@
       noise(0, 0.4, { gain: 0.6, freq: 1500, attack: 0.001 });
       tone(140, 0, 0.6, { gain: 0.5, slide: 35 });
     },
+    emote() {
+      tone(N.G5, 0, 0.09, { type: 'sine', gain: 0.1, slide: N.C6 });
+      tone(N.C6, 0.07, 0.12, { type: 'sine', gain: 0.08 });
+    },
     join() {
       tone(N.C5, 0, 0.2, { gain: 0.12 });
       tone(N.G5, 0.1, 0.35, { gain: 0.12 });

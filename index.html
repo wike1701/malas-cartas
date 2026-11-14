@@ -51,15 +51,19 @@
     <header class="topbar">
       <div class="brand">Malas Cartas</div>
       <div id="round-info" class="round-info"></div>
+      <button id="btn-emote" class="icon-btn hidden" data-act="emote-menu" title="Emoticonos" aria-expanded="false">😀</button>
       <button id="btn-mute" class="icon-btn mute-btn" data-act="mute" title="Silenciar">🔊</button>
       <button id="btn-code" class="code-chip" title="Copiar enlace de invitación"></button>
     </header>
+    <div id="emote-bar" class="emote-bar hidden" role="group" aria-label="Emoticonos"></div>
 
     <section id="lobby" class="lobby hidden"></section>
 
     <section id="table-wrap" class="hidden">
-      <div id="seats" class="seats"></div>
-      <div id="table" class="table"></div>
+      <div id="ring" class="ring">
+        <div id="table" class="table"></div>
+        <div id="seats" class="seats"></div>
+      </div>
       <div id="status" class="status"></div>
       <div id="actions" class="actions"></div>
       <div id="hand" class="hand"></div>

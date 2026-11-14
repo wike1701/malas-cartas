@@ -121,5 +121,56 @@ if (ga) {
   assert.ok(e5.includes('deal') && e5.includes('turn'));
 }
 
+// Bots, ajustes y espectador
+{
+  const b = MC.createGame();
+  MC.addPlayer(b, 'h', 'Hum');
+  for (let k = 0; k < 5; k++) MC.addBot(b);
+  assert.throws(() => MC.addBot(b), /llena/);
+  assert.ok(b.players.slice(1).every(p => p.bot && p.cid.startsWith('bot-')));
+  assert.strictEqual(new Set(b.players.map(p => p.name)).size, 6, 'nombres distintos');
+  MC.removePlayer(b, 3); MC.addBot(b);
+  assert.strictEqual(new Set(b.players.map(p => p.cid)).size, 6, 'ids distintos');
+  MC.setSettings(b, { fast: true });
+  assert.strictEqual(b.settings.fast, true);
+  MC.setSettings(b, { fast: 'x' });
+  assert.strictEqual(b.settings.fast, true, 'ignora valores no booleanos');
+  MC.startGame(b, rng);
+  assert.throws(() => MC.setSettings(b, { fast: false }), /sala de espera/);
+  assert.throws(() => MC.addBot(b), /empezado/);
+  // bidSum
+  const v0 = MC.viewFor(b, 0);
+  assert.strictEqual(v0.bidSum, 0);
+  assert.strictEqual(v0.settings.fast, true);
+  b.players[0].hand.length && MC.botAction(b, b.turn);
+  assert.strictEqual(MC.viewFor(b, 0).bidSum, b.players[0].bid);
+  // Espectador: un eliminado ve todas las manos, un vivo no
+  b.players[2].alive = false; b.players[2].hand = [];
+  const vs = MC.viewFor(b, 2), vl = MC.viewFor(b, 0);
+  assert.ok(vs.spectator && vs.players.every(p => Array.isArray(p.hand)));
+  assert.ok(!vl.spectator && vl.players[1].hand === null && Array.isArray(vl.players[0].hand));
+  MC.backToLobby(b);
+  b.players[1].connected = false; MC.backToLobby(b);
+  assert.strictEqual(b.players.length, 6, 'los bots siguen en la sala');
+}
+
+// Partidas completas solo con bots: siempre terminan y nunca dicen el número prohibido
+for (let n = 2; n <= 6; n++) for (let rep = 0; rep < 30; rep++) {
+  const b = MC.createGame();
+  for (let k = 0; k < n; k++) MC.addBot(b);
+  MC.startGame(b, rng);
+  let steps = 0;
+  while (b.phase !== 'gameOver') {
+    if (++steps > 20000) throw new Error('la partida de bots no termina');
+    if (b.phase === 'bidding') {
+      const f = MC.forbiddenBid(b), t = b.turn;
+      MC.botAction(b, t);
+      assert.notStrictEqual(b.players[t].bid, f);
+    } else if (b.phase === 'playing') MC.botAction(b, b.turn);
+    else MC.advance(b, rng);
+  }
+  assert.ok(b.winners.length >= 1);
+}
+
 console.log('OK - todas las pruebas pasan. Partida simulada de', rounds + 1, 'rondas, gana',
   g.winners.map(i => g.players[i].name).join(', '));
