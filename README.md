@@ -4,6 +4,9 @@ Juego de cartas multijugador con la baraja española, para jugar en el navegador
 
 **Jugar:** https://wike1701.github.io/malas-cartas/
 
+## Otro juego: Escondemóviles
+Escondite con móviles para jugar con la tele: escondéis los móviles, suenan de vez en cuando y uno tiene que encontrarlos. Ver [escondemoviles/README.md](escondemoviles/README.md).
+
 ## Cómo jugar online
 1. Uno pulsa **Crear sala** y comparte el código de 5 letras (o el enlace de invitación).
 2. Los demás escriben el código y pulsan **Unirse** (2 a 6 jugadores).

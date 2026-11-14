@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1640">
+  <title>Escondemóviles</title>
+  <meta name="description" content="Escondite con móviles: escondéis los móviles por la habitación, suenan de vez en cuando y uno tiene que encontrarlos. La tele hace de anfitrión.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect x='11' y='3' width='18' height='34' rx='4' fill='%23ffd23f' stroke='%231b1640' stroke-width='2'/><path d='M31 13a8 8 0 0 1 0 14M34 9a13 13 0 0 1 0 22' fill='none' stroke='%23ff5d8f' stroke-width='2.5' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Inicio en el móvil: nombre, avatar y código -->
+  <main id="home" class="screen">
+    <div class="home-box">
+      <div class="logo" aria-hidden="true">📱<span class="waves">)))</span></div>
+      <h1>Escondemóviles</h1>
+      <p class="tag">Esconded los móviles · suenan de vez en cuando · ¡encuéntralos!</p>
+
+      <label class="field">Tu nombre
+        <input id="name" maxlength="16" autocomplete="nickname" placeholder="Escribe tu nombre">
+      </label>
+
+      <form id="join-form" class="join">
+        <input id="code" maxlength="5" placeholder="CÓDIGO" autocomplete="off" spellcheck="false" aria-label="Código de la sala">
+        <button class="btn primary big" type="submit">Unirse</button>
+      </form>
+      <p class="muted small center">El código sale en la tele. También puedes escanear el QR.</p>
+
+      <details class="rules">
+        <summary>Cómo se juega</summary>
+        <ol>
+          <li>Abre el juego en la tele (o en un ordenador conectado a la tele) y escanead el QR con los móviles.</li>
+          <li>En cada ronda le toca buscar a uno. Esa persona sale de la habitación o se tapa los ojos.</li>
+          <li>Los demás esconden <b>su propio móvil</b> por la habitación y pulsan <b>Ya está escondido</b>. La pantalla se queda negra para no delatarlo.</li>
+          <li>Empieza la búsqueda: los móviles escondidos <b>suenan de vez en cuando</b>, cada uno con su sonido, y cada vez más a menudo.</li>
+          <li>Cuando encuentres uno, <b>mantén pulsada su pantalla</b> para marcarlo. Tienes una pista: hacer que suenen todos a la vez.</li>
+          <li>Quien busca gana <b>1 punto por móvil</b> encontrado (+1 si los encuentra todos). Cada móvil que no se encuentra da <b>2 puntos</b> a su dueño.</li>
+          <li>Todos buscan una vez. Gana quien más puntos tenga.</li>
+        </ol>
+      </details>
+      <a class="tv-link" href="?tv">📺 Usar esta pantalla como tele</a>
+    </div>
+  </main>
+
+  <!-- Móvil dentro de la sala -->
+  <main id="phone" class="screen hidden">
+    <header class="topbar">
+      <div id="me-chip" class="me-chip"></div>
+      <div id="ph-info" class="ph-info"></div>
+      <button class="icon-btn mute-btn" data-act="mute" title="Silenciar efectos"></button>
+    </header>
+    <section id="ph-body" class="ph-body"></section>
+  </main>
+
+  <!-- Pantalla negra del móvil escondido: todo es un botón que hay que mantener pulsado -->
+  <div id="stealth" class="stealth hidden">
+    <button id="hold" class="hold" aria-label="Mantén pulsado si has encontrado este móvil">
+      <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52"/><circle id="hold-arc" class="arc" cx="60" cy="60" r="52"/></svg>
+      <span id="stealth-icon" class="stealth-icon"></span>
+      <span id="stealth-text" class="stealth-text"></span>
+      <span id="stealth-sub" class="stealth-sub"></span>
+    </button>
+  </div>
+
+  <!-- Tele -->
+  <main id="tv" class="screen hidden">
+    <section id="tv-body" class="tv-body"></section>
+    <div class="tv-corner">
+      <span id="tv-code" class="code-chip"></span>
+      <button class="icon-btn mute-btn" data-act="mute"></button>
+      <button class="icon-btn fs-btn hidden" data-act="fullscreen" title="Pantalla completa">⛶</button>
+    </div>
+  </main>
+
+  <div id="banner" class="banner hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="vendor/qrcode.js"></script>
+  <script src="sound.js"></script>
+  <script src="game.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

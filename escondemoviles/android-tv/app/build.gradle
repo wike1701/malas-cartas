@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Firma: si existen las variables de entorno (secretos de GitHub) se usa esa clave, así las
+// actualizaciones se instalan encima de la versión anterior. Si no, se firma con la clave de depuración.
+def ks = System.getenv('TV_KEYSTORE_FILE')
+
+android {
+    namespace 'io.github.wike1701.escondemoviles'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.wike1701.escondemoviles'
+        minSdk 22          // Fire OS 5 (Fire TV Stick de 2.ª generación) en adelante
+        targetSdk 34
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName '1.0.' + (System.getenv('GITHUB_RUN_NUMBER') ?: '0')
+        // Página que abre la app: el modo TV de la web publicada.
+        buildConfigField 'String', 'GAME_URL', '"https://wike1701.github.io/malas-cartas/escondemoviles/?tv"'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        if (ks) {
+            release {
+                storeFile file(ks)
+                storePassword System.getenv('TV_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('TV_KEY_ALIAS')
+                keyPassword System.getenv('TV_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ks ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
